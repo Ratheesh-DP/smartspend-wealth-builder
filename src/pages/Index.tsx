@@ -1,60 +1,123 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, Wallet, PiggyBank } from "lucide-react";
-import { PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TrendingUp, TrendingDown, Wallet, PiggyBank, Target, Sparkles, ShieldCheck } from "lucide-react";
+import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
+import { useState, useMemo } from "react";
 
-const overviewCards = [
-  { title: "Total Income", value: "₹1,25,000", change: "+12%", icon: TrendingUp, positive: true },
-  { title: "Total Expenses", value: "₹68,450", change: "+5%", icon: TrendingDown, positive: false },
-  { title: "Savings", value: "₹56,550", change: "+22%", icon: PiggyBank, positive: true },
-  { title: "Budget Left", value: "₹31,550", change: "42%", icon: Wallet, positive: true },
-];
+interface Transaction {
+  id: string;
+  description: string;
+  amount: number;
+  type: "income" | "expense";
+  category: string;
+  date: string;
+}
 
-const categoryData = [
-  { name: "Food", value: 18500, color: "hsl(156, 72%, 45%)" },
-  { name: "Rent", value: 22000, color: "hsl(186, 72%, 45%)" },
-  { name: "Shopping", value: 8400, color: "hsl(38, 92%, 50%)" },
-  { name: "Travel", value: 6200, color: "hsl(280, 65%, 60%)" },
-  { name: "Bills", value: 9350, color: "hsl(0, 72%, 51%)" },
-  { name: "Entertainment", value: 4000, color: "hsl(210, 60%, 55%)" },
-];
+const CATEGORY_COLORS: Record<string, string> = {
+  Food: "hsl(38, 92%, 50%)",
+  Shopping: "hsl(38, 72%, 55%)",
+  Travel: "hsl(280, 65%, 60%)",
+  Bills: "hsl(0, 72%, 51%)",
+  Entertainment: "hsl(210, 60%, 55%)",
+  Education: "hsl(186, 72%, 45%)",
+  Housing: "hsl(280, 50%, 50%)",
+  Investment: "hsl(0, 60%, 55%)",
+  Transport: "hsl(320, 60%, 55%)",
+  Utilities: "hsl(156, 50%, 55%)",
+  Health: "hsl(156, 72%, 45%)",
+  Other: "hsl(215, 15%, 55%)",
+};
 
-const trendData = [
-  { month: "Sep", income: 110000, expenses: 62000 },
-  { month: "Oct", income: 115000, expenses: 71000 },
-  { month: "Nov", income: 108000, expenses: 58000 },
-  { month: "Dec", income: 125000, expenses: 75000 },
-  { month: "Jan", income: 120000, expenses: 65000 },
-  { month: "Feb", income: 125000, expenses: 68450 },
-];
-
-const recentTransactions = [
-  { id: 1, desc: "Swiggy Order", category: "Food", amount: -450, date: "Today" },
-  { id: 2, desc: "Salary Credit", category: "Income", amount: 125000, date: "1 Feb" },
-  { id: 3, desc: "Amazon Purchase", category: "Shopping", amount: -2199, date: "28 Jan" },
-  { id: 4, desc: "Electricity Bill", category: "Bills", amount: -1850, date: "27 Jan" },
-  { id: 5, desc: "Uber Ride", category: "Travel", amount: -320, date: "26 Jan" },
-];
+const chartTooltipStyle = {
+  background: "hsl(220, 18%, 7%)",
+  border: "1px solid hsl(220, 14%, 14%)",
+  borderRadius: "0.5rem",
+  color: "hsl(210, 20%, 95%)",
+};
 
 const Index = () => {
+  const { user } = useAuth();
+  const [trendPeriod, setTrendPeriod] = useState("daily");
+
+  const { data: transactions = [] } = useQuery({
+    queryKey: ["transactions"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("*")
+        .order("date", { ascending: true });
+      if (error) throw error;
+      return data as Transaction[];
+    },
+    enabled: !!user,
+  });
+
+  const stats = useMemo(() => {
+    const totalIncome = transactions.filter(t => t.type === "income").reduce((s, t) => s + Math.abs(t.amount), 0);
+    const totalExpenses = transactions.filter(t => t.type === "expense").reduce((s, t) => s + Math.abs(t.amount), 0);
+    const balance = totalIncome - totalExpenses;
+    return { totalIncome, totalExpenses, balance };
+  }, [transactions]);
+
+  const categoryData = useMemo(() => {
+    const map: Record<string, number> = {};
+    transactions.filter(t => t.type === "expense").forEach(t => {
+      map[t.category] = (map[t.category] || 0) + Math.abs(t.amount);
+    });
+    return Object.entries(map)
+      .map(([name, value]) => ({ name, value, color: CATEGORY_COLORS[name] || "hsl(215, 15%, 55%)" }))
+      .sort((a, b) => b.value - a.value);
+  }, [transactions]);
+
+  const trendData = useMemo(() => {
+    if (transactions.length === 0) return [];
+    let balance = 0;
+    return transactions.map(t => {
+      balance += t.amount;
+      return { date: t.date, balance: Math.max(0, balance) };
+    });
+  }, [transactions]);
+
+  const topCategory = categoryData[0]?.name || "N/A";
+  const savingsRate = stats.totalIncome > 0
+    ? ((stats.totalIncome - stats.totalExpenses) / stats.totalIncome * 100).toFixed(1)
+    : "0";
+
+  const recentTx = useMemo(() => {
+    return [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
+  }, [transactions]);
+
+  const overviewCards = [
+    { title: "Total Balance", value: stats.balance, icon: Wallet, className: "stat-balance" },
+    { title: "Total Income", value: stats.totalIncome, icon: TrendingUp, className: "stat-income" },
+    { title: "Total Expenses", value: stats.totalExpenses, icon: TrendingDown, className: "stat-expense" },
+  ];
+
+  const hasData = transactions.length > 0;
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-display font-bold">Dashboard</h1>
-        <p className="text-muted-foreground text-sm">Your financial overview for February 2026</p>
+        <h1 className="text-2xl font-display font-bold">
+          <span className="text-primary">Finance</span> Overview
+        </h1>
+        <p className="text-muted-foreground text-sm">Manage and track your financials seamlessly.</p>
       </div>
 
       {/* Overview Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {overviewCards.map((card) => (
-          <Card key={card.title} className="glass border-border/30">
+          <Card key={card.title} className={`glass-card ${card.className}`}>
             <CardContent className="pt-5 pb-4">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm text-muted-foreground">{card.title}</span>
-                <card.icon className={`w-4 h-4 ${card.positive ? "text-primary" : "text-destructive"}`} />
+                <card.icon className="w-5 h-5 text-muted-foreground/50" />
               </div>
-              <p className="text-2xl font-display font-bold">{card.value}</p>
-              <p className={`text-xs mt-1 ${card.positive ? "text-primary" : "text-destructive"}`}>
-                {card.change} vs last month
+              <p className="text-2xl font-display font-bold">
+                ₹{card.value.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
               </p>
             </CardContent>
           </Card>
@@ -62,99 +125,187 @@ const Index = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Spending Breakdown */}
-        <Card className="glass border-border/30">
+        {/* Balance Trend */}
+        <Card className="lg:col-span-2 glass-card">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-display">Spending Breakdown</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base font-display">Balance Trend</CardTitle>
+              <Select value={trendPeriod} onValueChange={setTrendPeriod}>
+                <SelectTrigger className="w-24 h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="daily">Daily</SelectItem>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie
-                  data={categoryData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={55}
-                  outerRadius={80}
-                  paddingAngle={3}
-                  dataKey="value"
-                >
-                  {categoryData.map((entry, idx) => (
-                    <Cell key={idx} fill={entry.color} stroke="transparent" />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    background: "hsl(220 18% 7%)",
-                    border: "1px solid hsl(220 14% 14%)",
-                    borderRadius: "0.5rem",
-                    color: "hsl(210 20% 95%)",
-                  }}
-                  formatter={(value: number) => [`₹${value.toLocaleString("en-IN")}`, ""]}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="grid grid-cols-2 gap-2 mt-2">
-              {categoryData.map((c) => (
-                <div key={c.name} className="flex items-center gap-2 text-xs">
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ background: c.color }} />
-                  <span className="text-muted-foreground">{c.name}</span>
-                  <span className="ml-auto font-medium">₹{(c.value / 1000).toFixed(1)}k</span>
-                </div>
-              ))}
-            </div>
+            {hasData ? (
+              <ResponsiveContainer width="100%" height={260}>
+                <AreaChart data={trendData}>
+                  <defs>
+                    <linearGradient id="balanceGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="hsl(38, 92%, 50%)" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="hsl(38, 92%, 50%)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 14%, 14%)" />
+                  <XAxis
+                    dataKey="date"
+                    stroke="hsl(215, 15%, 55%)"
+                    fontSize={11}
+                    tickFormatter={(v) => new Date(v).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}
+                  />
+                  <YAxis
+                    stroke="hsl(215, 15%, 55%)"
+                    fontSize={11}
+                    tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`}
+                  />
+                  <Tooltip
+                    contentStyle={chartTooltipStyle}
+                    formatter={(value: number) => [`₹${value.toLocaleString("en-IN")}`, "Balance"]}
+                    labelFormatter={(l) => new Date(l).toLocaleDateString("en-IN")}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="balance"
+                    stroke="hsl(38, 92%, 50%)"
+                    strokeWidth={2}
+                    fill="url(#balanceGrad)"
+                    dot={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[260px] text-muted-foreground text-sm">
+                Add transactions to see your balance trend
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Trend Chart */}
-        <Card className="lg:col-span-2 glass border-border/30">
+        {/* Expenses by Category */}
+        <Card className="glass-card">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-display">Income vs Expenses</CardTitle>
+            <CardTitle className="text-base font-display">Expenses by Category</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={260}>
-              <LineChart data={trendData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 14% 14%)" />
-                <XAxis dataKey="month" stroke="hsl(215 15% 55%)" fontSize={12} />
-                <YAxis stroke="hsl(215 15% 55%)" fontSize={12} tickFormatter={(v) => `₹${v / 1000}k`} />
-                <Tooltip
-                  contentStyle={{
-                    background: "hsl(220 18% 7%)",
-                    border: "1px solid hsl(220 14% 14%)",
-                    borderRadius: "0.5rem",
-                    color: "hsl(210 20% 95%)",
-                  }}
-                  formatter={(value: number) => [`₹${value.toLocaleString("en-IN")}`, ""]}
-                />
-                <Line type="monotone" dataKey="income" stroke="hsl(156, 72%, 45%)" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="expenses" stroke="hsl(0, 72%, 51%)" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
+            {categoryData.length > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie
+                      data={categoryData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={80}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {categoryData.map((entry, idx) => (
+                        <Cell key={idx} fill={entry.color} stroke="transparent" />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={chartTooltipStyle}
+                      formatter={(value: number) => [`₹${value.toLocaleString("en-IN")}`, ""]}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  {categoryData.map((c) => (
+                    <div key={c.name} className="flex items-center gap-2 text-xs">
+                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: c.color }} />
+                      <span className="text-muted-foreground truncate">{c.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-[200px] text-muted-foreground text-sm">
+                No expense data yet
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Recent Transactions */}
-      <Card className="glass border-border/30">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base font-display">Recent Transactions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {recentTransactions.map((tx) => (
-              <div key={tx.id} className="flex items-center justify-between py-2 border-b border-border/30 last:border-0">
-                <div>
-                  <p className="text-sm font-medium">{tx.desc}</p>
-                  <p className="text-xs text-muted-foreground">{tx.category} · {tx.date}</p>
-                </div>
-                <span className={`text-sm font-display font-semibold ${tx.amount > 0 ? "text-primary" : "text-destructive"}`}>
-                  {tx.amount > 0 ? "+" : ""}₹{Math.abs(tx.amount).toLocaleString("en-IN")}
-                </span>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Recent Transactions */}
+        <Card className="lg:col-span-2 glass-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-display">Recent Transactions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {recentTx.length > 0 ? (
+              <div className="space-y-3">
+                {recentTx.map((tx) => (
+                  <div key={tx.id} className="flex items-center justify-between py-2 border-b border-border/20 last:border-0">
+                    <div>
+                      <p className="text-sm font-medium">{tx.description}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {tx.category} · {new Date(tx.date).toLocaleDateString("en-IN")}
+                      </p>
+                    </div>
+                    <span className={`text-sm font-display font-semibold ${
+                      tx.amount > 0 ? "text-primary" : "text-destructive"
+                    }`}>
+                      {tx.amount > 0 ? "+" : ""}₹{Math.abs(tx.amount).toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+            ) : (
+              <p className="text-center py-8 text-muted-foreground text-sm">No transactions yet</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Quick Insights */}
+        <Card className="glass-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-display">Quick Insights</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-lg bg-warning/10 flex items-center justify-center shrink-0">
+                <Target className="w-4 h-4 text-warning" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Top Expense Category</p>
+                <p className="font-display font-bold">{topCategory}</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                <Sparkles className="w-4 h-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Savings Rate</p>
+                <p className="font-display font-bold">{savingsRate}%</p>
+                <p className="text-xs text-muted-foreground">of total income saved</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-4 h-4 text-accent" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Recommendation</p>
+                <p className="text-xs">
+                  {hasData
+                    ? `Consider reducing your budget for ${topCategory} to improve your savings rate this month.`
+                    : "Start adding transactions to get personalized insights!"}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };
