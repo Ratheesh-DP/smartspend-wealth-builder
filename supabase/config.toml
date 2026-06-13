@@ -1,1 +1,4 @@
 project_id = "mnmbobkizlgproobusnq"
+
+[functions.beru-chat]
+verify_jwt = false

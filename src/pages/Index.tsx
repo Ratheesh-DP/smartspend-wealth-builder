@@ -3,6 +3,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { TrendingUp, TrendingDown, Wallet, PiggyBank, Target, Sparkles, ShieldCheck } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { useAuth } from "@/contexts/AuthContext";
+import { useFormatAmount } from "@/contexts/PreferencesContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
@@ -41,6 +42,7 @@ const chartTooltipStyle = {
 const Index = () => {
   const { user } = useAuth();
   const [trendPeriod, setTrendPeriod] = useState("daily");
+  const fmt = useFormatAmount();
 
   const { data: transactions = [] } = useQuery({
     queryKey: ["transactions"],
@@ -116,9 +118,7 @@ const Index = () => {
                 <span className="text-sm text-muted-foreground">{card.title}</span>
                 <card.icon className="w-5 h-5 text-muted-foreground/50" />
               </div>
-              <p className="text-2xl font-display font-bold">
-                ₹{card.value.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-              </p>
+              <p className="text-2xl font-display font-bold">{fmt(card.value)}</p>
             </CardContent>
           </Card>
         ))}
@@ -254,7 +254,7 @@ const Index = () => {
                     <span className={`text-sm font-display font-semibold ${
                       tx.amount > 0 ? "text-primary" : "text-destructive"
                     }`}>
-                      {tx.amount > 0 ? "+" : ""}₹{Math.abs(tx.amount).toLocaleString("en-IN")}
+                      {fmt(tx.amount, { signed: true })}
                     </span>
                   </div>
                 ))}

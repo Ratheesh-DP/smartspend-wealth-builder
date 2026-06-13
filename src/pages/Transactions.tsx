@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePreferences, useFormatAmount } from "@/contexts/PreferencesContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -31,6 +32,8 @@ interface Transaction {
 
 const Transactions = () => {
   const { user } = useAuth();
+  const { isAdmin } = usePreferences();
+  const fmt = useFormatAmount();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<"all" | "income" | "expense">("all");
@@ -216,6 +219,7 @@ const Transactions = () => {
             Track all your income & expenses
           </p>
         </div>
+        {isAdmin ? (
         <Dialog open={addOpen} onOpenChange={setAddOpen}>
           <DialogTrigger asChild>
             <Button className="gap-1.5 glow-primary">
@@ -271,6 +275,11 @@ const Transactions = () => {
             </div>
           </DialogContent>
         </Dialog>
+        ) : (
+          <span className="text-xs text-muted-foreground px-2 py-1 rounded-full border border-border/40">
+            Viewer mode — switch to Admin in the top bar to add
+          </span>
+        )}
       </div>
 
       {/* CSV Upload Drop Zone */}
@@ -369,17 +378,19 @@ const Transactions = () => {
                       <td className={`py-3 text-right font-display font-semibold ${
                         tx.amount > 0 ? "text-primary" : "text-destructive"
                       }`}>
-                        {tx.amount > 0 ? "+" : ""}₹{Math.abs(tx.amount).toLocaleString("en-IN")}
+                        {fmt(tx.amount, { signed: true })}
                       </td>
                       <td className="py-3 text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                          onClick={() => deleteMutation.mutate(tx.id)}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
+                        {isAdmin && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            onClick={() => deleteMutation.mutate(tx.id)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   ))}
