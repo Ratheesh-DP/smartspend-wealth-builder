@@ -81,8 +81,9 @@ async def test_add_transaction():
         await page.wait_for_selector("text=Add Transaction")
 
         # Type = Expense (default)
-        # Category
-        await page.click("button:has-text('Select')")
+        # Open the Category select (second combobox in the dialog)
+        comboboxes = await page.query_selector_all("button[role='combobox']")
+        await comboboxes[1].click()
         await page.click("div[role='option']:has-text('Food')")
 
         await page.fill("input[placeholder='e.g. Swiggy Order']", "Test Expense")
