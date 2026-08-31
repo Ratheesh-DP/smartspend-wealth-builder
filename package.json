@@ -11,9 +11,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui",
-    "test:e2e:debug": "playwright test --debug"
+    "test:e2e": "python3 e2e_python/run_all.py"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
