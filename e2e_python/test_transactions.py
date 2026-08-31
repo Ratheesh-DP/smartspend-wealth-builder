@@ -77,13 +77,17 @@ async def test_add_transaction():
         await page.goto("http://localhost:8080/transactions")
         await page.wait_for_selector("h1:has-text('Transactions')", timeout=10000)
 
-        await page.click("button:has-text('Add')")
-        await page.wait_for_selector("text=Add Transaction")
+        await page.get_by_role("button", name="Add").first.click()
+        await page.wait_for_selector("text=Add Transaction", timeout=10000)
 
         # Type = Expense (default)
-        # Open the Category select (the combobox inside the Category field)
-        await page.wait_for_selector("button[role='combobox']")
-        await page.click("div:has-text('Category') + div button, div:has(> label:has-text('Category')) button")
+        # Open the Category select (second combobox in the dialog)
+        await page.wait_for_selector("button[role='combobox']", timeout=10000)
+        comboboxes = await page.query_selector_all("button[role='combobox']")
+        # The first combobox is the Type filter on the page; dialog comboboxes come after in DOM order
+        # because Radix portals append at the end of <body>.
+        category_combobox = comboboxes[-1]
+        await category_combobox.click()
         await page.click("div[role='option']:has-text('Food')")
 
         await page.fill("input[placeholder='e.g. Swiggy Order']", "Test Expense")
