@@ -77,18 +77,23 @@ async def test_add_transaction():
         await page.goto("http://localhost:8080/transactions")
         await page.wait_for_selector("h1:has-text('Transactions')", timeout=10000)
 
-        await page.click("button:has-text('Add')")
-        await page.wait_for_selector("text=Add Transaction")
+        # Click the page-level "+ Add" button (not the TopBar "Add Transaction")
+        add_btn = page.get_by_role("button", name="Add", exact=True)
+        await add_btn.click()
+        dialog = page.locator("[role='dialog']")
+        await dialog.wait_for(timeout=10000)
+        await dialog.get_by_role("heading", name="Add Transaction").wait_for(timeout=10000)
 
         # Type = Expense (default)
-        # Category
-        await page.click("button:has-text('Select')")
+        # Open the Category select inside the dialog
+        category_combobox = dialog.locator("button[role='combobox']").last
+        await category_combobox.click()
         await page.click("div[role='option']:has-text('Food')")
 
-        await page.fill("input[placeholder='e.g. Swiggy Order']", "Test Expense")
-        await page.fill("input[type='number']", "500")
+        await dialog.locator("input[placeholder='e.g. Swiggy Order']").fill("Test Expense")
+        await dialog.locator("input[type='number']").fill("500")
 
-        await page.click("button:has-text('Add Transaction')")
+        await dialog.get_by_role("button", name="Add Transaction").click()
         await page.wait_for_selector("text=Test Expense")
         await page.wait_for_selector("text=₹500.00")
 

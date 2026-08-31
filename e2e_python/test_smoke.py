@@ -35,7 +35,7 @@ async def test_sidebar_navigation():
 
         await page.click("a:has-text('Insights')")
         await page.wait_for_url("**/insights")
-        await page.wait_for_selector("h1:has-text('Insights'), text=Insights")
+        await page.wait_for_selector("h1:has-text('Smart Insights')")
 
         await page.screenshot(path=str(SCREENSHOTS / "smoke_navigation.png"))
         print("PASS: sidebar navigation works")
