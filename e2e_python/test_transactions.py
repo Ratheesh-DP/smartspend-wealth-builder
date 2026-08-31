@@ -82,7 +82,7 @@ async def test_add_transaction():
         await add_btn.click()
         dialog = page.locator("[role='dialog']")
         await dialog.wait_for(timeout=10000)
-        await dialog.locator("text=Add Transaction").wait_for(timeout=10000)
+        await dialog.get_by_role("heading", name="Add Transaction").wait_for(timeout=10000)
 
         # Type = Expense (default)
         # Open the Category select inside the dialog
@@ -93,7 +93,7 @@ async def test_add_transaction():
         await dialog.locator("input[placeholder='e.g. Swiggy Order']").fill("Test Expense")
         await dialog.locator("input[type='number']").fill("500")
 
-        await dialog.locator("button:has-text('Add Transaction')").click()
+        await dialog.get_by_role("button", name="Add Transaction").click()
         await page.wait_for_selector("text=Test Expense")
         await page.wait_for_selector("text=₹500.00")
 
