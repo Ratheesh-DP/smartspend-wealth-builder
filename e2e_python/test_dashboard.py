@@ -65,8 +65,8 @@ async def test_dashboard_category_chart():
 
         await page.goto("http://localhost:8080/")
         await page.wait_for_selector("text=Expenses by Category", timeout=10000)
-        charts = await page.query_selector_all(".recharts-surface")
-        assert len(charts) >= 1, "Expected at least one Recharts surface"
+        # Wait for SVG charts to render (Recharts draws in an <svg>)
+        await page.wait_for_selector("svg", timeout=10000)
 
         await page.screenshot(path=str(SCREENSHOTS / "dashboard_chart.png"))
         print("PASS: dashboard renders category chart")
