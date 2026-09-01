@@ -6,6 +6,7 @@ import {
   TrendingUp,
   Settings,
   Wallet,
+  ScanSearch,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -26,6 +27,7 @@ const mainNav = [
   { title: "Budget", url: "/budget", icon: PiggyBank },
   { title: "Insights", url: "/insights", icon: Lightbulb },
   { title: "Investments", url: "/investments", icon: TrendingUp },
+  { title: "Controller", url: "/controller", icon: ScanSearch },
 ];
 
 const bottomNav = [
