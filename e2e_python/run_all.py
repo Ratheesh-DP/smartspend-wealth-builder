@@ -9,6 +9,7 @@ from test_smoke import main as smoke_main
 from test_dashboard import main as dashboard_main
 from test_transactions import main as transactions_main
 from test_preferences import main as preferences_main
+from test_controller import main as controller_main
 
 
 async def main():
@@ -17,6 +18,7 @@ async def main():
     await dashboard_main()
     await transactions_main()
     await preferences_main()
+    await controller_main()
     print("\n=== All E2E tests passed ===")
 
 
