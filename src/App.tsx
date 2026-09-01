@@ -12,6 +12,7 @@ import Budget from "./pages/Budget";
 import Insights from "./pages/Insights";
 import Investments from "./pages/Investments";
 import SettingsPage from "./pages/SettingsPage";
+import Controller from "./pages/Controller";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,6 +30,7 @@ const App = () => (
             <Route path="/budget" element={<AppLayout><Budget /></AppLayout>} />
             <Route path="/insights" element={<AppLayout><Insights /></AppLayout>} />
             <Route path="/investments" element={<AppLayout><Investments /></AppLayout>} />
+            <Route path="/controller" element={<AppLayout><Controller /></AppLayout>} />
             <Route path="/settings" element={<AppLayout><SettingsPage /></AppLayout>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
