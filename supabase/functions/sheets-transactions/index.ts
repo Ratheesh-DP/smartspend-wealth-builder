@@ -11,7 +11,7 @@ function jsonResponse(body: unknown, status = 200) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "GET") return jsonResponse({ error: "Method not allowed" }, 405);
+  if (req.method !== "GET" && req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
 
   try {
     const result = await loadSheetTransactions();
