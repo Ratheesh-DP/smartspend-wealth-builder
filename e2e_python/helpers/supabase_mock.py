@@ -62,6 +62,14 @@ class SupabaseMock:
         url = request.url
         method = request.method
 
+        if "/functions/v1/sheets-transactions" in url and method == "POST":
+            await route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=json.dumps({"source": "Google Sheets", "sheetTitle": "Transactions", "transactions": self.transactions}),
+            )
+            return
+
         if "/rest/v1/transactions" in url and method == "GET":
             await route.fulfill(
                 status=200,

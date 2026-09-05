@@ -2,3 +2,9 @@ project_id = "mnmbobkizlgproobusnq"
 
 [functions.beru-chat]
 verify_jwt = false
+
+[functions.sheets-transactions]
+verify_jwt = false
+
+[functions.ocr-transactions]
+verify_jwt = false

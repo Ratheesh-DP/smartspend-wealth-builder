@@ -4,18 +4,9 @@ import { TrendingUp, TrendingDown, Wallet, PiggyBank, Target, Sparkles, ShieldCh
 import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFormatAmount } from "@/contexts/PreferencesContext";
-import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
-
-interface Transaction {
-  id: string;
-  description: string;
-  amount: number;
-  type: "income" | "expense";
-  category: string;
-  date: string;
-}
+import { loadTransactions } from "@/lib/transactions";
 
 const CATEGORY_COLORS: Record<string, string> = {
   Food: "hsl(38, 92%, 50%)",
@@ -44,16 +35,9 @@ const Index = () => {
   const [trendPeriod, setTrendPeriod] = useState("daily");
   const fmt = useFormatAmount();
 
-  const { data: transactions = [] } = useQuery({
+  const { data: transactions = [], isError } = useQuery({
     queryKey: ["transactions"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("transactions")
-        .select("*")
-        .order("date", { ascending: true });
-      if (error) throw error;
-      return data as Transaction[];
-    },
+    queryFn: loadTransactions,
     enabled: !!user,
   });
 
@@ -108,6 +92,12 @@ const Index = () => {
         </h1>
         <p className="text-muted-foreground text-sm">Manage and track your financials seamlessly.</p>
       </div>
+
+      {isError && (
+        <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning">
+          Google Sheets is not readable yet. Share the spreadsheet with the connected Google account, then refresh.
+        </div>
+      )}
 
       {/* Overview Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

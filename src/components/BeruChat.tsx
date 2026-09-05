@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { loadTransactions } from "@/lib/transactions";
 
 interface Msg {
   role: "user" | "assistant" | "system";
@@ -26,10 +27,7 @@ export function BeruChat() {
 
   const { data: transactions = [] } = useQuery({
     queryKey: ["transactions"],
-    queryFn: async () => {
-      const { data } = await supabase.from("transactions").select("*").order("date", { ascending: false }).limit(200);
-      return data ?? [];
-    },
+    queryFn: loadTransactions,
   });
 
   useEffect(() => {

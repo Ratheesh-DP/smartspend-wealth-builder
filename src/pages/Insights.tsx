@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { loadTransactions } from "@/lib/transactions";
 import {
   AlertTriangle,
   Info,
@@ -24,15 +24,6 @@ import {
   CartesianGrid,
   ResponsiveContainer,
 } from "recharts";
-
-interface Transaction {
-  id: string;
-  description: string;
-  amount: number;
-  type: "income" | "expense";
-  category: string;
-  date: string;
-}
 
 type AlertLevel = "tip" | "warning" | "critical";
 interface Alert {
@@ -139,14 +130,7 @@ const Insights = () => {
 
   const { data: transactions = [] } = useQuery({
     queryKey: ["transactions"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("transactions")
-        .select("*")
-        .order("date", { ascending: true });
-      if (error) throw error;
-      return data as Transaction[];
-    },
+    queryFn: loadTransactions,
     enabled: !!user,
   });
 

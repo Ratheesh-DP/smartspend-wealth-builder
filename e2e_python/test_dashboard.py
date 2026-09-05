@@ -29,9 +29,9 @@ async def test_dashboard_overview_cards():
         income_text = f"₹{income:,.2f}"
         expense_text = f"₹{expenses:,.2f}"
 
-        await page.wait_for_selector(f"text={balance_text}")
-        await page.wait_for_selector(f"text={income_text}")
-        await page.wait_for_selector(f"text={expense_text}")
+        await page.wait_for_selector(f"text={balance_text}", timeout=10000)
+        await page.wait_for_selector(f"text={income_text}", timeout=10000)
+        await page.wait_for_selector(f"text={expense_text}", timeout=10000)
 
         await page.screenshot(path=str(SCREENSHOTS / "dashboard_overview.png"))
         print("PASS: dashboard overview cards show correct totals")
