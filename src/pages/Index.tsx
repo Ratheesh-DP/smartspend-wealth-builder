@@ -4,10 +4,9 @@ import { TrendingUp, TrendingDown, Wallet, PiggyBank, Target, Sparkles, ShieldCh
 import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFormatAmount } from "@/contexts/PreferencesContext";
-import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
-import { loadTransactions, Transaction } from "@/lib/transactions";
+import { loadTransactions } from "@/lib/transactions";
 
 const CATEGORY_COLORS: Record<string, string> = {
   Food: "hsl(38, 92%, 50%)",

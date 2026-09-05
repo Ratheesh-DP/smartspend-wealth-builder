@@ -1,9 +1,8 @@
 import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-import { loadTransactions, Transaction } from "@/lib/transactions";
+import { loadTransactions } from "@/lib/transactions";
 import {
   AlertTriangle,
   Info,
@@ -25,15 +24,6 @@ import {
   CartesianGrid,
   ResponsiveContainer,
 } from "recharts";
-
-interface Transaction {
-  id: string;
-  description: string;
-  amount: number;
-  type: "income" | "expense";
-  category: string;
-  date: string;
-}
 
 type AlertLevel = "tip" | "warning" | "critical";
 interface Alert {
