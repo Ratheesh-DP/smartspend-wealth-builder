@@ -314,9 +314,9 @@ const Transactions = () => {
         )}
       </div>
 
-      {isError && (
+      {transactionFeed?.warning && (
         <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning">
-          Google Sheets is not readable yet. Share the spreadsheet with the connected Google account, then refresh.
+          {transactionFeed.warning}
         </div>
       )}
 
