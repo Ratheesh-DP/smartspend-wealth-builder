@@ -35,11 +35,13 @@ const Index = () => {
   const [trendPeriod, setTrendPeriod] = useState("daily");
   const fmt = useFormatAmount();
 
-  const { data: transactions = [], isError } = useQuery({
+  const { data: transactionFeed } = useQuery({
     queryKey: ["transactions"],
     queryFn: loadTransactions,
     enabled: !!user,
+    retry: false,
   });
+  const transactions = transactionFeed?.transactions ?? [];
 
   const stats = useMemo(() => {
     const totalIncome = transactions.filter(t => t.type === "income").reduce((s, t) => s + Math.abs(t.amount), 0);
@@ -93,9 +95,9 @@ const Index = () => {
         <p className="text-muted-foreground text-sm">Manage and track your financials seamlessly.</p>
       </div>
 
-      {isError && (
+      {transactionFeed?.warning && (
         <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning">
-          Google Sheets is not readable yet. Share the spreadsheet with the connected Google account, then refresh.
+          {transactionFeed.warning}
         </div>
       )}
 

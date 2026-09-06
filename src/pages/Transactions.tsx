@@ -49,11 +49,13 @@ const Transactions = () => {
   const [formCategory, setFormCategory] = useState("");
   const [formDate, setFormDate] = useState(new Date().toISOString().split("T")[0]);
 
-  const { data: transactions = [], isLoading, isError } = useQuery({
+  const { data: transactionFeed, isLoading } = useQuery({
     queryKey: ["transactions"],
     queryFn: loadTransactions,
     enabled: !!user,
+    retry: false,
   });
+  const transactions = transactionFeed?.transactions ?? [];
 
   const addMutation = useMutation({
     mutationFn: async (tx: Omit<Transaction, "id">) => createLocalTransaction(tx),
@@ -313,9 +315,9 @@ const Transactions = () => {
         )}
       </div>
 
-      {isError && (
+      {transactionFeed?.warning && (
         <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning">
-          Google Sheets is not readable yet. Share the spreadsheet with the connected Google account, then refresh.
+          {transactionFeed.warning}
         </div>
       )}
 

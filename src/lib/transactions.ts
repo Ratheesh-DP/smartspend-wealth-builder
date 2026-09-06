@@ -10,6 +10,12 @@ export interface Transaction {
   source?: "sheets" | "ocr" | "manual" | "csv";
 }
 
+export interface TransactionLoadResult {
+  transactions: Transaction[];
+  source: "google-sheets" | "local" | "empty";
+  warning?: string;
+}
+
 const LOCAL_TRANSACTIONS_KEY = "smartspend_imported_transactions";
 
 function readLocalTransactions(): Transaction[] {
@@ -26,16 +32,23 @@ function writeLocalTransactions(transactions: Transaction[]) {
   window.localStorage.setItem(LOCAL_TRANSACTIONS_KEY, JSON.stringify(transactions));
 }
 
-export async function loadTransactions(): Promise<Transaction[]> {
+export async function loadTransactions(): Promise<TransactionLoadResult> {
   const localTransactions = readLocalTransactions();
   const { data, error } = await supabase.functions.invoke("sheets-transactions");
 
   if (error) {
-    if (localTransactions.length > 0) return localTransactions;
-    throw new Error("Google Sheets could not be read. Check that the connected Google account can open your spreadsheet.");
+    return {
+      transactions: localTransactions,
+      source: localTransactions.length > 0 ? "local" : "empty",
+      warning: "Google Sheets access is unavailable. Share the spreadsheet with the connected Google account, then refresh.",
+    };
   }
 
-  return [...(data?.transactions ?? []), ...localTransactions];
+  const sheetTransactions = Array.isArray(data?.transactions) ? data.transactions as Transaction[] : [];
+  return {
+    transactions: [...sheetTransactions, ...localTransactions],
+    source: sheetTransactions.length > 0 ? "google-sheets" : localTransactions.length > 0 ? "local" : "empty",
+  };
 }
 
 export function addLocalTransactions(rows: Transaction[]) {

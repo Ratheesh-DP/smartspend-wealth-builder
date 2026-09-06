@@ -25,10 +25,12 @@ export function BeruChat() {
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const { data: transactions = [] } = useQuery({
+  const { data: transactionFeed } = useQuery({
     queryKey: ["transactions"],
     queryFn: loadTransactions,
+    retry: false,
   });
+  const transactions = transactionFeed?.transactions ?? [];
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });

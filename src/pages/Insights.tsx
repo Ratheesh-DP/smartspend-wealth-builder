@@ -128,11 +128,13 @@ const alertStyles: Record<AlertLevel, { bg: string; border: string; icon: typeof
 const Insights = () => {
   const { user } = useAuth();
 
-  const { data: transactions = [] } = useQuery({
+  const { data: transactionFeed } = useQuery({
     queryKey: ["transactions"],
     queryFn: loadTransactions,
     enabled: !!user,
+    retry: false,
   });
+  const transactions = transactionFeed?.transactions ?? [];
 
   const analytics = useMemo(() => {
     const totalIncome = transactions
