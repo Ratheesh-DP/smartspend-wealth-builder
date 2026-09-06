@@ -28,6 +28,7 @@ export function BeruChat() {
   const { data: transactionFeed } = useQuery({
     queryKey: ["transactions"],
     queryFn: loadTransactions,
+    retry: false,
   });
   const transactions = transactionFeed?.transactions ?? [];
 

@@ -53,6 +53,7 @@ const Transactions = () => {
     queryKey: ["transactions"],
     queryFn: loadTransactions,
     enabled: !!user,
+    retry: false,
   });
   const transactions = transactionFeed?.transactions ?? [];
 
