@@ -49,11 +49,12 @@ const Transactions = () => {
   const [formCategory, setFormCategory] = useState("");
   const [formDate, setFormDate] = useState(new Date().toISOString().split("T")[0]);
 
-  const { data: transactions = [], isLoading, isError } = useQuery({
+  const { data: transactionFeed, isLoading } = useQuery({
     queryKey: ["transactions"],
     queryFn: loadTransactions,
     enabled: !!user,
   });
+  const transactions = transactionFeed?.transactions ?? [];
 
   const addMutation = useMutation({
     mutationFn: async (tx: Omit<Transaction, "id">) => createLocalTransaction(tx),
