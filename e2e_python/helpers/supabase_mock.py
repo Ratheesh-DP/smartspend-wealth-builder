@@ -108,3 +108,4 @@ class SupabaseMock:
     async def install(self, page):
         self.reset()
         await page.route("**/rest/v1/**", self.handle_route)
+        await page.route("**/functions/v1/**", self.handle_route)
