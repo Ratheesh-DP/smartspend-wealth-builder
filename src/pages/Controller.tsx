@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowDownRight,
@@ -11,11 +11,18 @@ import {
   ScanSearch,
   ShieldCheck,
   Sparkles,
+  Upload,
+  FileText,
+  CheckCircle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { loadTransactions, Transaction } from "@/lib/transactions";
 
 type RecordStatus = "matched" | "exception";
 
@@ -29,6 +36,15 @@ interface ReconciliationRecord {
   ledgerDate: string;
   status: RecordStatus;
   reason?: string;
+}
+
+type LiveMatchStatus = "matched" | "amount-mismatch" | "date-mismatch" | "duplicate" | "unmatched";
+
+interface LiveMatch {
+  statement: Transaction;
+  dashboard: Transaction | null;
+  status: LiveMatchStatus;
+  reason: string;
 }
 
 const EXCEPTION_REASONS: Record<number, string> = {
@@ -73,9 +89,25 @@ const BATCH = buildSyntheticBatch();
 
 const formatInr = (value: number) => `₹${value.toLocaleString("en-IN")}`;
 
+const normalizeText = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+const daysBetween = (left: string, right: string) =>
+  Math.abs(new Date(left).getTime() - new Date(right).getTime()) / (1000 * 60 * 60 * 24);
+
 const Controller = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [runCount, setRunCount] = useState(1);
+  const [statementRows, setStatementRows] = useState<Transaction[]>([]);
+  const [liveMatches, setLiveMatches] = useState<LiveMatch[]>([]);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: transactionFeed } = useQuery({
+    queryKey: ["transactions"],
+    queryFn: loadTransactions,
+    retry: false,
+  });
+  const dashboardTransactions = transactionFeed?.transactions ?? [];
 
   const summary = useMemo(() => {
     const matched = BATCH.filter((record) => record.status === "matched");
@@ -102,6 +134,83 @@ const Controller = () => {
     }, 700);
   };
 
+  const readFileAsDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("Could not read the selected file"));
+    reader.readAsDataURL(file);
+  });
+
+  const handleStatementUpload = async (file: File) => {
+    if (!file.type.startsWith("image/") && file.type !== "application/pdf") {
+      toast.error("Upload a PDF, JPG, PNG, or WEBP bank statement");
+      return;
+    }
+    if (file.size > 12 * 1024 * 1024) {
+      toast.error("Bank statements must be under 12 MB");
+      return;
+    }
+    setOcrLoading(true);
+    setLiveMatches([]);
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      const { data, error } = await supabase.functions.invoke("ocr-transactions", {
+        body: { fileName: file.name, mimeType: file.type, dataUrl },
+      });
+      if (error) throw error;
+      const rows = Array.isArray(data?.transactions) ? data.transactions as Transaction[] : [];
+      if (!rows.length) throw new Error("No transactions found in that statement");
+      setStatementRows(rows);
+      toast.success(`${rows.length} statement rows ready to reconcile`);
+    } catch (error: any) {
+      toast.error(error?.message || "Could not read that bank statement");
+    } finally {
+      setOcrLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const reconcileLiveStatement = () => {
+    if (!statementRows.length) return;
+    const usedDashboardIds = new Set<string>();
+    const results = statementRows.map((statement) => {
+      const statementDescription = normalizeText(statement.description);
+      const candidates = dashboardTransactions.filter((dashboard) => {
+        const sameType = dashboard.type === statement.type;
+        const sameDescription = statementDescription.length > 3 && (
+          normalizeText(dashboard.description).includes(statementDescription) ||
+          statementDescription.includes(normalizeText(dashboard.description))
+        );
+        return sameType && (sameDescription || dashboard.category === statement.category);
+      });
+      const amountCandidate = candidates.find((candidate) => Math.abs(Math.abs(candidate.amount) - Math.abs(statement.amount)) < 0.01);
+      const dateCandidate = amountCandidate && candidates.find((candidate) => daysBetween(candidate.date, statement.date) <= 3 && Math.abs(Math.abs(candidate.amount) - Math.abs(statement.amount)) < 0.01);
+      const bestCandidate = dateCandidate || amountCandidate || candidates[0];
+
+      if (!bestCandidate) {
+        return { statement, dashboard: null, status: "unmatched" as const, reason: "No dashboard transaction matched the description or category." };
+      }
+      if (usedDashboardIds.has(bestCandidate.id)) {
+        return { statement, dashboard: bestCandidate, status: "duplicate" as const, reason: "This dashboard transaction was already matched to another statement row." };
+      }
+      usedDashboardIds.add(bestCandidate.id);
+      if (!amountCandidate) {
+        return { statement, dashboard: bestCandidate, status: "amount-mismatch" as const, reason: "Description matched, but the amount differs." };
+      }
+      if (!dateCandidate) {
+        return { statement, dashboard: bestCandidate, status: "date-mismatch" as const, reason: "Amount matched, but the posting date is more than 3 days apart." };
+      }
+      return { statement, dashboard: bestCandidate, status: "matched" as const, reason: "Amount, type, and posting date matched." };
+    });
+    setLiveMatches(results);
+    toast.success(`Reconciled ${results.length} statement rows`);
+  };
+
+  const liveSummary = useMemo(() => ({
+    matched: liveMatches.filter((match) => match.status === "matched").length,
+    exceptions: liveMatches.filter((match) => match.status !== "matched").length,
+  }), [liveMatches]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -120,6 +229,44 @@ const Controller = () => {
           {isRunning ? "Running agent" : "Run reconciliation"}
         </Button>
       </div>
+
+      <Card className="glass-card border-primary/30">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-base font-display"><Landmark className="h-4 w-4 text-primary" />Reconcile a real bank statement</CardTitle>
+              <p className="mt-1 text-xs text-muted-foreground">Upload a statement, review its OCR rows, then compare them with the dashboard feed.</p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={ocrLoading} className="gap-2">
+                <Upload className="h-4 w-4" />{ocrLoading ? "Reading statement…" : "Upload statement"}
+              </Button>
+              <input ref={fileInputRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleStatementUpload(file); }} />
+              <Button onClick={reconcileLiveStatement} disabled={!statementRows.length || !dashboardTransactions.length || ocrLoading} className="gap-2 glow-primary"><ScanSearch className="h-4 w-4" />Match rows</Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {transactionFeed?.warning && <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning">{transactionFeed.warning} Local imports can still be matched.</div>}
+          {!statementRows.length ? (
+            <div className="flex items-center justify-center gap-3 rounded-lg border border-dashed border-border/50 py-8 text-sm text-muted-foreground"><FileText className="h-5 w-5" />No statement loaded yet.</div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded-lg bg-secondary/30 p-3"><p className="text-xs text-muted-foreground">Statement rows</p><p className="mt-1 text-xl font-display font-bold">{statementRows.length}</p></div>
+                <div className="rounded-lg bg-primary/5 p-3"><p className="text-xs text-muted-foreground">Matched</p><p className="mt-1 text-xl font-display font-bold text-primary">{liveSummary.matched}</p></div>
+                <div className="rounded-lg bg-destructive/5 p-3"><p className="text-xs text-muted-foreground">Exceptions</p><p className="mt-1 text-xl font-display font-bold text-destructive">{liveSummary.exceptions}</p></div>
+                <div className="rounded-lg bg-secondary/30 p-3"><p className="text-xs text-muted-foreground">Dashboard rows</p><p className="mt-1 text-xl font-display font-bold">{dashboardTransactions.length}</p></div>
+              </div>
+              <div className="max-h-72 overflow-auto rounded-lg border border-border/40">
+                <table className="w-full min-w-[700px] text-left text-sm"><thead className="border-b border-border/40 bg-secondary/20 text-xs text-muted-foreground"><tr><th className="px-4 py-3">Statement row</th><th className="px-4 py-3">Dashboard match</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Finding</th></tr></thead>
+                  <tbody className="divide-y divide-border/30">{(liveMatches.length ? liveMatches : statementRows.map((statement) => ({ statement, dashboard: null, status: "unmatched" as const, reason: "Ready to match." }))).map((match, index) => <tr key={`${match.statement.id}-${index}`}><td className="px-4 py-3"><p className="font-medium">{match.statement.description}</p><p className="mt-1 text-xs text-muted-foreground">{match.statement.date} · {formatInr(Math.abs(match.statement.amount))}</p></td><td className="px-4 py-3">{match.dashboard ? <><p>{match.dashboard.description}</p><p className="mt-1 text-xs text-muted-foreground">{match.dashboard.date} · {formatInr(Math.abs(match.dashboard.amount))}</p></> : <span className="text-muted-foreground">—</span>}</td><td className="px-4 py-3">{match.status === "matched" ? <Badge className="gap-1"><CheckCircle className="h-3 w-3" />Matched</Badge> : <Badge variant="destructive">{match.status.replace("-", " ")}</Badge>}</td><td className="px-4 py-3 text-xs text-muted-foreground">{match.reason}</td></tr>)}</tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Card className="glass-card stat-balance">
