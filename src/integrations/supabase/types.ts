@@ -83,6 +83,33 @@ export type Database = {
         }
         Relationships: []
       }
+      kite_sessions: {
+        Row: {
+          access_token: string
+          api_key: string
+          client_id: string
+          expires_at: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          access_token: string
+          api_key: string
+          client_id: string
+          expires_at?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          access_token?: string
+          api_key?: string
+          client_id?: string
+          expires_at?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null

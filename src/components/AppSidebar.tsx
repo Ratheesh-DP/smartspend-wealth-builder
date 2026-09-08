@@ -7,6 +7,7 @@ import {
   Settings,
   Wallet,
   ScanSearch,
+  LineChart,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -28,6 +29,7 @@ const mainNav = [
   { title: "Insights", url: "/insights", icon: Lightbulb },
   { title: "Investments", url: "/investments", icon: TrendingUp },
   { title: "Controller", url: "/controller", icon: ScanSearch },
+  { title: "Zerodha", url: "/zerodha", icon: LineChart },
 ];
 
 const bottomNav = [
