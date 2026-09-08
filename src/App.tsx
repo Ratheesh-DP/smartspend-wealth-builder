@@ -13,6 +13,7 @@ import Insights from "./pages/Insights";
 import Investments from "./pages/Investments";
 import SettingsPage from "./pages/SettingsPage";
 import Controller from "./pages/Controller";
+import Zerodha from "./pages/Zerodha";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -31,6 +32,7 @@ const App = () => (
             <Route path="/insights" element={<AppLayout><Insights /></AppLayout>} />
             <Route path="/investments" element={<AppLayout><Investments /></AppLayout>} />
             <Route path="/controller" element={<AppLayout><Controller /></AppLayout>} />
+            <Route path="/zerodha" element={<AppLayout><Zerodha /></AppLayout>} />
             <Route path="/settings" element={<AppLayout><SettingsPage /></AppLayout>} />
             <Route path="*" element={<NotFound />} />
           </Routes>

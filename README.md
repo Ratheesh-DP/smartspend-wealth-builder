@@ -91,6 +91,12 @@ This application empowers users to make informed financial decisions and work to
    npm run preview
    ```
 
+## Zerodha workspace
+
+Open **Zerodha** in the app sidebar and enter the API key, API secret, and one-time request token from your Kite Connect app. The request token is exchanged by the Cloud function; the resulting access token is stored server-side and is never returned to the browser. On later local reloads, the saved API key reconnects to the server-side session until Kite requires a new daily login.
+
+The Signals tab loads the official Nifty 100 constituent CSV, maps symbols to NSE instrument tokens, fetches daily candles, calculates the requested SMA pair, and ranks the latest bullish or bearish crossovers. Kite Connect access must be enabled for the account, and the API secret is not persisted.
+
 ---
 
 ## 📁 Project Structure
