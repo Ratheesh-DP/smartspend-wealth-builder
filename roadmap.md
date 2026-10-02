@@ -1,10 +1,10 @@
 # SmartSpend task roadmap
 
+- [ ] Walk the user through granting the connected Google account spreadsheet access and verify real dashboard totals.
+- [ ] Deploy Beru and OCR, then verify a real transaction Q&A and real statement reconciliation (blocked until hosted database resumes, sheet access is granted, and a statement is uploaded).
+- [ ] Add confirmed statement-row import and refresh budget alerts from the real transaction feed.
+- [ ] Add a transparent multi-month cash forecast page based on transactions and budgets.
+- [ ] Add Zerodha selected-stock OHLC/SMA/crossover chart and secure AI trend/risk explanation.
 - [x] Add secure Zerodha Kite login and session reuse (Cloud deployment pending project resume).
 - [x] Add Zerodha user profile and Nifty 100 SMA Signals tabs (live API calls pending deployment).
 - [x] Document Zerodha dashboard setup and local development.
-- [ ] Add local guest budget creation, tracking, and over-limit alerts.
-- [ ] Deploy the Beru and OCR backend functions.
-- [ ] Verify the live transaction feed, OCR import, and matching dashboard totals when the sheet is accessible.
-- [ ] Add real bank-statement reconciliation against dashboard transactions with discrepancy flags.
-- [ ] Document the Google Sheets connection steps for the connected account and real spreadsheet access.
