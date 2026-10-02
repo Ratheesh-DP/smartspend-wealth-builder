@@ -21,8 +21,9 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { loadTransactions, Transaction } from "@/lib/transactions";
+import { addLocalTransactions, loadTransactions, Transaction } from "@/lib/transactions";
 
 type RecordStatus = "matched" | "exception";
 
@@ -101,6 +102,7 @@ const Controller = () => {
   const [liveMatches, setLiveMatches] = useState<LiveMatch[]>([]);
   const [ocrLoading, setOcrLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
 
   const { data: transactionFeed } = useQuery({
     queryKey: ["transactions"],
@@ -211,6 +213,13 @@ const Controller = () => {
     exceptions: liveMatches.filter((match) => match.status !== "matched").length,
   }), [liveMatches]);
 
+  const importReviewedRows = () => {
+    if (!statementRows.length) return;
+    addLocalTransactions(statementRows);
+    queryClient.invalidateQueries({ queryKey: ["transactions"] });
+    toast.success(`${statementRows.length} reviewed statement rows added to your dashboard feed`);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -247,7 +256,7 @@ const Controller = () => {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {transactionFeed?.warning && <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning">{transactionFeed.warning} Local imports can still be matched.</div>}
+          {transactionFeed?.warning && <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning">Google Sheets is not currently accessible to the connected account. Share the spreadsheet with that account, then refresh; local statement rows can still be reviewed and imported.</div>}
           {!statementRows.length ? (
             <div className="flex items-center justify-center gap-3 rounded-lg border border-dashed border-border/50 py-8 text-sm text-muted-foreground"><FileText className="h-5 w-5" />No statement loaded yet.</div>
           ) : (
@@ -257,6 +266,12 @@ const Controller = () => {
                 <div className="rounded-lg bg-primary/5 p-3"><p className="text-xs text-muted-foreground">Matched</p><p className="mt-1 text-xl font-display font-bold text-primary">{liveSummary.matched}</p></div>
                 <div className="rounded-lg bg-destructive/5 p-3"><p className="text-xs text-muted-foreground">Exceptions</p><p className="mt-1 text-xl font-display font-bold text-destructive">{liveSummary.exceptions}</p></div>
                 <div className="rounded-lg bg-secondary/30 p-3"><p className="text-xs text-muted-foreground">Dashboard rows</p><p className="mt-1 text-xl font-display font-bold">{dashboardTransactions.length}</p></div>
+              </div>
+              <div className="flex flex-col gap-3 border-b border-border/30 pb-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-muted-foreground">Rows are not added to your dashboard until you confirm this import.</p>
+                <Button variant="outline" onClick={importReviewedRows} disabled={!liveMatches.length} className="gap-2">
+                  <CheckCircle className="h-4 w-4" />Add reviewed rows to dashboard
+                </Button>
               </div>
               <div className="max-h-72 overflow-auto rounded-lg border border-border/40">
                 <table className="w-full min-w-[700px] text-left text-sm"><thead className="border-b border-border/40 bg-secondary/20 text-xs text-muted-foreground"><tr><th className="px-4 py-3">Statement row</th><th className="px-4 py-3">Dashboard match</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Finding</th></tr></thead>
