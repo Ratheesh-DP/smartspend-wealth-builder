@@ -14,6 +14,7 @@ import Investments from "./pages/Investments";
 import SettingsPage from "./pages/SettingsPage";
 import Controller from "./pages/Controller";
 import Zerodha from "./pages/Zerodha";
+import CashForecast from "./pages/CashForecast";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,6 +30,7 @@ const App = () => (
             <Route path="/" element={<AppLayout><Index /></AppLayout>} />
             <Route path="/transactions" element={<AppLayout><Transactions /></AppLayout>} />
             <Route path="/budget" element={<AppLayout><Budget /></AppLayout>} />
+            <Route path="/forecast" element={<AppLayout><CashForecast /></AppLayout>} />
             <Route path="/insights" element={<AppLayout><Insights /></AppLayout>} />
             <Route path="/investments" element={<AppLayout><Investments /></AppLayout>} />
             <Route path="/controller" element={<AppLayout><Controller /></AppLayout>} />

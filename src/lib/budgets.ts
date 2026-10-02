@@ -26,6 +26,10 @@ export function loadBudgets(month: number, year: number) {
   return readBudgets().filter((budget) => budget.month === month && budget.year === year);
 }
 
+export function loadAllBudgets() {
+  return readBudgets();
+}
+
 export function saveBudget(category: string, amount: number, month: number, year: number) {
   const existing = readBudgets();
   const matching = existing.find(

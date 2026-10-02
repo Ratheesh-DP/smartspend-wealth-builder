@@ -8,6 +8,7 @@ import {
   Wallet,
   ScanSearch,
   LineChart,
+  CalendarClock,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -26,6 +27,7 @@ const mainNav = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Transactions", url: "/transactions", icon: ArrowLeftRight },
   { title: "Budget", url: "/budget", icon: PiggyBank },
+  { title: "Cash Forecast", url: "/forecast", icon: CalendarClock },
   { title: "Insights", url: "/insights", icon: Lightbulb },
   { title: "Investments", url: "/investments", icon: TrendingUp },
   { title: "Controller", url: "/controller", icon: ScanSearch },

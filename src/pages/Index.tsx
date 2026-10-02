@@ -97,7 +97,8 @@ const Index = () => {
 
       {transactionFeed?.warning && (
         <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning">
-          {transactionFeed.warning}
+          <p className="font-medium">Google Sheets could not be read, so these totals may include only locally imported transactions.</p>
+          <p className="mt-1">Open the spending spreadsheet, choose Share, and give Viewer access to the Google account connected to Sheets in Lovable. Then refresh this page to compare your real totals.</p>
         </div>
       )}
 
