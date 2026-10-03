@@ -215,7 +215,17 @@ const Controller = () => {
 
   const importReviewedRows = () => {
     if (!statementRows.length) return;
-    addLocalTransactions(statementRows);
+    const reconciliationById = new Map(liveMatches.map((match) => [match.statement.id, match]));
+    const reviewedRows = statementRows.map((row) => {
+      const match = reconciliationById.get(row.id);
+      return match ? {
+        ...row,
+        reconciliationStatus: match.status,
+        reconciliationReason: match.reason,
+        comparedTransactionId: match.dashboard?.id,
+      } : row;
+    });
+    addLocalTransactions(reviewedRows);
     queryClient.invalidateQueries({ queryKey: ["transactions"] });
     toast.success(`${statementRows.length} reviewed statement rows added to your dashboard feed`);
   };
@@ -251,7 +261,7 @@ const Controller = () => {
                 <Upload className="h-4 w-4" />{ocrLoading ? "Reading statement…" : "Upload statement"}
               </Button>
               <input ref={fileInputRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleStatementUpload(file); }} />
-              <Button onClick={reconcileLiveStatement} disabled={!statementRows.length || !dashboardTransactions.length || ocrLoading} className="gap-2 glow-primary"><ScanSearch className="h-4 w-4" />Match rows</Button>
+              <Button onClick={reconcileLiveStatement} disabled={!statementRows.length || ocrLoading} className="gap-2 glow-primary"><ScanSearch className="h-4 w-4" />Match rows</Button>
             </div>
           </div>
         </CardHeader>
