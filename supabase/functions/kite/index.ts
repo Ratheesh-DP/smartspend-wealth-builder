@@ -200,6 +200,40 @@ async function generateSignals(apiKey: string, params: { short: number; long: nu
   return { signals: results, scanned: stocks.length, source: "Nifty 100" };
 }
 
+async function getCandles(apiKey: string, tickerValue: unknown, shortValue: unknown, longValue: unknown, lookbackValue: unknown) {
+  const ticker = cleanText(tickerValue).toUpperCase();
+  if (!/^[A-Z0-9&-]{1,30}$/.test(ticker)) throw Object.assign(new Error("Enter a valid NSE ticker"), { status: 400 });
+  const short = Math.min(Math.max(Number(shortValue) || 6, 2), 50);
+  const long = Math.min(Math.max(Number(longValue) || 30, short + 1), 200);
+  const lookback = Math.min(Math.max(Number(lookbackValue) || 180, 60), 365);
+  const session = await findSession(apiKey);
+  const instrumentResponse = await kiteRequest("/instruments/NSE", apiKey, session.access_token);
+  const instrument = keyedRows(instrumentResponse).find((row) => row.tradingsymbol?.toUpperCase() === ticker);
+  if (!instrument?.instrument_token) throw Object.assign(new Error(`NSE instrument ${ticker} was not found`), { status: 404 });
+  const to = new Date();
+  const from = new Date(Date.now() - (lookback + long + 20) * 2 * 86400000);
+  const response = await kiteRequest(`/instruments/historical/${instrument.instrument_token}/day?from=${dateOnly(from)}&to=${dateOnly(to)}`, apiKey, session.access_token);
+  const raw = Array.isArray(response?.data?.candles) ? response.data.candles.slice(-lookback) : [];
+  const candles = raw.map((candle) => ({
+    date: dateOnly(new Date(candle[0])), open: Number(candle[1]), high: Number(candle[2]),
+    low: Number(candle[3]), close: Number(candle[4]), volume: Number(candle[5]),
+  })).filter((candle) => Number.isFinite(candle.close));
+  const crossovers: Array<{ date: string; type: string }> = [];
+  candles.forEach((candle, index) => {
+    const closes = candles.map((item) => item.close);
+    const previousShort = sma(closes, index - 1, short);
+    const previousLong = sma(closes, index - 1, long);
+    const currentShort = sma(closes, index, short);
+    const currentLong = sma(closes, index, long);
+    if ([previousShort, previousLong, currentShort, currentLong].some((value) => value === null)) return;
+    if (previousShort <= previousLong && currentShort > currentLong) crossovers.push({ date: candle.date, type: "Bullish" });
+    if (previousShort >= previousLong && currentShort < currentLong) crossovers.push({ date: candle.date, type: "Bearish" });
+    candle["shortSma"] = currentShort;
+    candle["longSma"] = currentLong;
+  });
+  return { ticker, candles, crossovers, short, long };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
@@ -226,6 +260,7 @@ Deno.serve(async (req) => {
       const maxStocks = Math.min(Math.max(Number(body?.maxStocks) || 25, 1), MAX_STOCKS);
       return jsonResponse(await generateSignals(apiKey, { short, long, lookback, maxStocks }));
     }
+    if (action === "candles") return jsonResponse(await getCandles(apiKey, body?.ticker, body?.short, body?.long, body?.lookback));
     return jsonResponse({ error: "Unknown Kite action" }, 400);
   } catch (error) {
     const status = Math.min(Math.max(Number(error?.status) || 500, 400), 599);
