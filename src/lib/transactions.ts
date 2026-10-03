@@ -8,6 +8,9 @@ export interface Transaction {
   category: string;
   date: string;
   source?: "sheets" | "ocr" | "manual" | "csv";
+  reconciliationStatus?: "matched" | "amount-mismatch" | "date-mismatch" | "duplicate" | "unmatched";
+  reconciliationReason?: string;
+  comparedTransactionId?: string;
 }
 
 export interface TransactionLoadResult {
@@ -53,7 +56,8 @@ export async function loadTransactions(): Promise<TransactionLoadResult> {
 
 export function addLocalTransactions(rows: Transaction[]) {
   const existing = readLocalTransactions();
-  writeLocalTransactions([...rows, ...existing]);
+  const knownIds = new Set(existing.map((row) => row.id));
+  writeLocalTransactions([...rows.filter((row) => !knownIds.has(row.id)), ...existing]);
 }
 
 export function removeLocalTransaction(id: string) {
