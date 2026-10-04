@@ -82,9 +82,11 @@ async function kiteRequest(path: string, apiKey: string, accessToken: string, in
       ...(init.headers ?? {}),
     },
   });
-  const body = await response.json().catch(() => ({}));
+  const raw = await response.text();
+  let body: any;
+  try { body = JSON.parse(raw); } catch { body = raw; }
   if (!response.ok || body?.status === "error") {
-    const error = new Error(body?.message || "Kite Connect request failed");
+    const error = new Error(body?.message || (typeof body === "string" ? body.slice(0, 300) : "Kite Connect request failed"));
     error.status = response.status || 502;
     throw error;
   }
@@ -148,7 +150,7 @@ async function generateSignals(apiKey: string, params: { short: number; long: nu
   ]);
   if (!constituentsResponse.ok) throw new Error("The official Nifty 100 constituent list could not be loaded");
   const constituentRows = keyedRows(await constituentsResponse.text());
-  const instrumentRows = keyedRows(await instrumentsResponse.text());
+  const instrumentRows = keyedRows(instrumentsResponse);
   const instruments = new Map(instrumentRows.filter((row) => row.tradingsymbol).map((row) => [row.tradingsymbol, row]));
   const stocks = constituentRows.map((row) => ({
     ticker: cleanText(row.symbol || row.tradingsymbol),
@@ -214,14 +216,14 @@ async function getCandles(apiKey: string, tickerValue: unknown, shortValue: unkn
   const to = new Date();
   const from = new Date(Date.now() - (lookback + long + 20) * 2 * 86400000);
   const response = await kiteRequest(`/instruments/historical/${instrument.instrument_token}/day?from=${dateOnly(from)}&to=${dateOnly(to)}`, apiKey, session.access_token);
-  const raw = Array.isArray(response?.data?.candles) ? response.data.candles.slice(-lookback) : [];
-  const candles = raw.map((candle) => ({
+  const raw = Array.isArray(response?.data?.candles) ? response.data.candles : [];
+  const allCandles = raw.map((candle) => ({
     date: dateOnly(new Date(candle[0])), open: Number(candle[1]), high: Number(candle[2]),
     low: Number(candle[3]), close: Number(candle[4]), volume: Number(candle[5]),
   })).filter((candle) => Number.isFinite(candle.close));
   const crossovers: Array<{ date: string; type: string }> = [];
-  const closes = candles.map((item) => item.close);
-  candles.forEach((candle, index) => {
+  const closes = allCandles.map((item) => item.close);
+  allCandles.forEach((candle, index) => {
     const previousShort = sma(closes, index - 1, short);
     const previousLong = sma(closes, index - 1, long);
     const currentShort = sma(closes, index, short);
@@ -232,7 +234,9 @@ async function getCandles(apiKey: string, tickerValue: unknown, shortValue: unkn
     candle["shortSma"] = currentShort;
     candle["longSma"] = currentLong;
   });
-  return { ticker, candles, crossovers, short, long };
+  const candles = allCandles.slice(-lookback);
+  const visibleDates = new Set(candles.map((candle) => candle.date));
+  return { ticker, candles, crossovers: crossovers.filter((item) => visibleDates.has(item.date)), short, long };
 }
 
 async function explainTrend(req: Request, body: any) {
