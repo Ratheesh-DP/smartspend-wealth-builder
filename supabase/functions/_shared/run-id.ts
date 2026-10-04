@@ -20,8 +20,13 @@ export function getLovableAiGatewayRunId(request: Request) {
 
 export function getLovableAiGatewayResponseHeaders(upstream: Headers, init?: HeadersInit) {
   const headers = new Headers(init);
+  const exposed = new Set((headers.get("Access-Control-Expose-Headers") ?? "").split(",").map((value) => value.trim()).filter(Boolean));
   upstream.forEach((value, name) => {
-    if (name.toLowerCase().startsWith("x-lovable-aig-")) headers.set(name, value);
+    if (name.toLowerCase().startsWith("x-lovable-aig-")) {
+      headers.set(name, value);
+      exposed.add(name);
+    }
   });
+  if (exposed.size) headers.set("Access-Control-Expose-Headers", Array.from(exposed).join(", "));
   return headers;
 }
