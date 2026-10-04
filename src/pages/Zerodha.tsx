@@ -11,7 +11,10 @@ import {
   RefreshCw,
   ShieldCheck,
   UserRound,
+  CandlestickChart,
+  BrainCircuit,
 } from "lucide-react";
+import { Bar, CartesianGrid, ComposedChart, Line, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,7 +49,12 @@ type KiteResponse = {
   signals?: Signal[];
   scanned?: number;
   source?: string;
+  candles?: Candle[];
+  crossovers?: Array<{ date: string; type: string }>;
+  analysis?: string;
 };
+
+type Candle = { date: string; open: number; high: number; low: number; close: number; volume: number; shortSma?: number | null; longSma?: number | null };
 
 const API_KEY_STORAGE = "smartspend_kite_api_key";
 
@@ -83,6 +91,13 @@ const Zerodha = () => {
   const [longSma, setLongSma] = useState("30");
   const [lookback, setLookback] = useState("60");
   const [maxStocks, setMaxStocks] = useState("25");
+  const [selectedTicker, setSelectedTicker] = useState("");
+  const [selectedSignalType, setSelectedSignalType] = useState("No recent crossover");
+  const [candles, setCandles] = useState<Candle[]>([]);
+  const [crossovers, setCrossovers] = useState<Array<{ date: string; type: string }>>([]);
+  const [chartLoading, setChartLoading] = useState(false);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysis, setAnalysis] = useState("");
 
   const connected = Boolean(profile);
 
@@ -156,10 +171,51 @@ const Zerodha = () => {
       });
       setSignals(result.signals ?? []);
       setScanned(result.scanned ?? 0);
+      setSelectedTicker(result.signals?.[0]?.ticker ?? "");
+      setSelectedSignalType(result.signals?.[0]?.type ?? "No recent crossover");
+      setCandles([]);
+      setAnalysis("");
     } catch (scanError) {
       setError(scanError instanceof Error ? scanError.message : "Signal scan failed");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const loadTickerCandles = async (tickerValue: string) => {
+    const ticker = tickerValue.trim().toUpperCase();
+    if (!ticker || !apiKey) return null;
+    setChartLoading(true);
+    setError("");
+    try {
+      const result = await invokeKite({ action: "candles", apiKey, ticker, short: Number(shortSma), long: Number(longSma), lookback: 180 });
+      setCandles(result.candles ?? []);
+      setCrossovers(result.crossovers ?? []);
+      setSelectedTicker(ticker);
+      setAnalysis("");
+      return result.candles ?? [];
+    } catch (chartError) {
+      setError(chartError instanceof Error ? chartError.message : "Could not load daily candles");
+      return null;
+    } finally {
+      setChartLoading(false);
+    }
+  };
+
+  const explainSelectedTrend = async () => {
+    if (!selectedTicker.trim()) return;
+    setAnalysisLoading(true);
+    setError("");
+    setAnalysis("");
+    try {
+      const recentCandles = candles.length ? candles : await loadTickerCandles(selectedTicker);
+      if (!recentCandles || recentCandles.length < 3) throw new Error("Load at least three daily candles before requesting an explanation.");
+      const result = await invokeKite({ action: "explain", apiKey, ticker: selectedTicker.trim().toUpperCase(), signal: selectedSignalType, candles: recentCandles.slice(-60) });
+      setAnalysis(result.analysis ?? "No analysis was returned.");
+    } catch (analysisError) {
+      setError(analysisError instanceof Error ? analysisError.message : "Could not analyze the trend");
+    } finally {
+      setAnalysisLoading(false);
     }
   };
 
@@ -276,9 +332,20 @@ const Zerodha = () => {
             <Card className="glass-card overflow-hidden">
               <CardHeader><CardTitle className="text-base">Latest crossovers</CardTitle></CardHeader>
               <CardContent className="p-0">
-                {signals.length === 0 ? <div className="px-6 pb-8 pt-2 text-sm text-muted-foreground">Set your SMA parameters and generate a scan to see ranked crossovers.</div> : <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="border-y border-border/60 bg-muted/20 text-xs uppercase tracking-wider text-muted-foreground"><tr><th className="px-6 py-3">Rank</th><th className="px-4 py-3">Ticker</th><th className="px-4 py-3">Company</th><th className="px-4 py-3">Crossover</th><th className="px-4 py-3">Date</th><th className="px-4 py-3 text-right">Close</th><th className="px-4 py-3 text-right">SMA {shortSma}</th><th className="px-6 py-3 text-right">SMA {longSma}</th></tr></thead><tbody>{signals.map((signal, index) => <tr key={`${signal.ticker}-${signal.date}`} className="border-b border-border/40 last:border-0"><td className="px-6 py-4 font-mono text-muted-foreground">{String(index + 1).padStart(2, "0")}</td><td className="px-4 py-4 font-display font-semibold">{signal.ticker}</td><td className="max-w-[220px] truncate px-4 py-4 text-muted-foreground">{signal.company}</td><td className="px-4 py-4"><Badge variant={signal.type === "Bullish" ? "default" : "destructive"}>{signal.type}</Badge></td><td className="px-4 py-4 text-muted-foreground">{formatDate(signal.date)}</td><td className="px-4 py-4 text-right font-mono">₹{formatNumber(signal.close)}</td><td className="px-4 py-4 text-right font-mono">{formatNumber(signal.shortSma)}</td><td className="px-6 py-4 text-right font-mono">{formatNumber(signal.longSma)}</td></tr>)}</tbody></table></div>}
+                {signals.length === 0 ? <div className="px-6 pb-8 pt-2 text-sm text-muted-foreground">Set your SMA parameters and generate a scan to see ranked crossovers.</div> : <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="border-y border-border/60 bg-muted/20 text-xs uppercase tracking-wider text-muted-foreground"><tr><th className="px-6 py-3">Rank</th><th className="px-4 py-3">Ticker</th><th className="px-4 py-3">Company</th><th className="px-4 py-3">Crossover</th><th className="px-4 py-3">Date</th><th className="px-4 py-3 text-right">Close</th><th className="px-4 py-3 text-right">SMA {shortSma}</th><th className="px-6 py-3 text-right">SMA {longSma}</th></tr></thead><tbody>{signals.map((signal, index) => <tr key={`${signal.ticker}-${signal.date}`} onClick={() => { setSelectedTicker(signal.ticker); setSelectedSignalType(signal.type); void loadTickerCandles(signal.ticker); }} className={`cursor-pointer border-b border-border/40 last:border-0 hover:bg-muted/20 ${selectedTicker === signal.ticker ? "bg-muted/20" : ""}`}><td className="px-6 py-4 font-mono text-muted-foreground">{String(index + 1).padStart(2, "0")}</td><td className="px-4 py-4 font-display font-semibold">{signal.ticker}</td><td className="max-w-[220px] truncate px-4 py-4 text-muted-foreground">{signal.company}</td><td className="px-4 py-4"><Badge variant={signal.type === "Bullish" ? "default" : "destructive"}>{signal.type}</Badge></td><td className="px-4 py-4 text-muted-foreground">{formatDate(signal.date)}</td><td className="px-4 py-4 text-right font-mono">₹{formatNumber(signal.close)}</td><td className="px-4 py-4 text-right font-mono">{formatNumber(signal.shortSma)}</td><td className="px-6 py-4 text-right font-mono">{formatNumber(signal.longSma)}</td></tr>)}</tbody></table></div>}
               </CardContent>
             </Card>
+
+            <Card className="glass-card">
+              <CardHeader><CardTitle className="flex items-center gap-2 text-base"><CandlestickChart className="h-4 w-4 text-primary" />Daily price & SMA chart</CardTitle><p className="text-sm text-muted-foreground">Select a scan result or enter an NSE ticker to load historical daily prices.</p></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-col gap-3 sm:flex-row"><Input aria-label="Chart ticker" value={selectedTicker} onChange={(event) => setSelectedTicker(event.target.value.toUpperCase())} placeholder="NSE ticker (e.g. RELIANCE)" className="sm:max-w-xs" /><Button variant="outline" onClick={() => void loadTickerCandles(selectedTicker)} disabled={chartLoading || !selectedTicker.trim()}>{chartLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}Load chart</Button></div>
+                {candles.length > 1 ? <div className="h-[320px] w-full"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={candles} margin={{ top: 10, right: 10, left: 5, bottom: 4 }}><CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" /><XAxis dataKey="date" minTickGap={32} tickFormatter={(value) => value.slice(5)} stroke="hsl(var(--muted-foreground))" /><YAxis domain={["auto", "auto"]} width={72} tickFormatter={(value) => `₹${Number(value).toLocaleString("en-IN")}`} stroke="hsl(var(--muted-foreground))" /><Tooltip labelFormatter={(label) => formatDate(String(label))} formatter={(value: number, name) => [`₹${formatNumber(value)}`, name]} contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "6px" }} /><Bar dataKey="close" name="Daily close" barSize={5} shape={(props: any) => { const { x, y, width, payload, yAxis } = props; const scale = yAxis?.scale; if (!scale) return <g />; const up = payload.close >= payload.open; return <g><line x1={x + width / 2} x2={x + width / 2} y1={scale(payload.high)} y2={scale(payload.low)} stroke={up ? "hsl(var(--primary))" : "hsl(var(--destructive))"} strokeWidth={1} /><rect x={x} y={Math.min(scale(payload.open), scale(payload.close))} width={Math.max(width, 2)} height={Math.max(Math.abs(scale(payload.open) - scale(payload.close)), 1)} fill={up ? "hsl(var(--primary))" : "hsl(var(--destructive))"} /></g>; }} /><Line type="monotone" dataKey="shortSma" name={`SMA ${shortSma}`} stroke="hsl(var(--accent))" dot={false} connectNulls /><Line type="monotone" dataKey="longSma" name={`SMA ${longSma}`} stroke="hsl(var(--warning))" dot={false} connectNulls />{crossovers.map((item) => <ReferenceDot key={`${item.date}-${item.type}`} x={item.date} y={candles.find((candle) => candle.date === item.date)?.close} r={4} fill={item.type === "Bullish" ? "hsl(var(--primary))" : "hsl(var(--destructive))"} stroke="hsl(var(--background))" />)}</ComposedChart></ResponsiveContainer></div> : <div className="flex h-52 items-center justify-center text-sm text-muted-foreground">{chartLoading ? "Loading daily candles…" : "No chart data loaded."}</div>}
+                <div className="flex flex-wrap gap-4 text-xs text-muted-foreground"><span>Daily candles</span><span className="text-accent">SMA {shortSma}</span><span className="text-warning">SMA {longSma}</span><span>{crossovers.length} crossover markers</span></div>
+              </CardContent>
+            </Card>
+
+            <Card className="glass-card"><CardHeader><CardTitle className="flex items-center gap-2 text-base"><BrainCircuit className="h-4 w-4 text-accent" />Trend context & risk notes</CardTitle><p className="text-sm text-muted-foreground">A concise explanation of recent candle structure and the selected crossover. Not investment advice.</p></CardHeader><CardContent className="space-y-4"><div className="grid gap-3 sm:grid-cols-[1fr_auto]"><label className="space-y-2 text-sm"><span className="text-muted-foreground">Crossover signal</span><select aria-label="Crossover signal" value={selectedSignalType} onChange={(event) => setSelectedSignalType(event.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"><option>Bullish</option><option>Bearish</option><option>No recent crossover</option></select></label><Button onClick={() => void explainSelectedTrend()} disabled={analysisLoading || chartLoading || !selectedTicker.trim()} className="self-end gap-2">{analysisLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <BrainCircuit className="h-4 w-4" />}{analysisLoading ? "Analyzing…" : "Explain trend & risks"}</Button></div>{analysis && <div className="whitespace-pre-wrap rounded-md border border-border/50 bg-secondary/20 p-4 text-sm leading-relaxed">{analysis}</div>}</CardContent></Card>
           </TabsContent>
         </Tabs>
       )}
