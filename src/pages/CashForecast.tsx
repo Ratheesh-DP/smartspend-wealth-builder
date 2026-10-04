@@ -4,13 +4,14 @@ import { useQuery } from "@tanstack/react-query";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { loadTransactions } from "@/lib/transactions";
-import { loadAllBudgets } from "@/lib/budgets";
+import { loadBudgets } from "@/lib/budgets";
 import { useFormatAmount } from "@/contexts/PreferencesContext";
 
 const CashForecast = () => {
   const fmt = useFormatAmount();
   const { data: feed, isLoading } = useQuery({ queryKey: ["transactions"], queryFn: loadTransactions, retry: false });
-  const { data: budgets = [] } = useQuery({ queryKey: ["budgets-all"], queryFn: loadAllBudgets });
+  const now = new Date();
+  const { data: budgets = [] } = useQuery({ queryKey: ["budgets", now.getMonth() + 1, now.getFullYear()], queryFn: () => loadBudgets(now.getMonth() + 1, now.getFullYear()) });
   const transactions = feed?.transactions ?? [];
 
   const projection = useMemo(() => {
