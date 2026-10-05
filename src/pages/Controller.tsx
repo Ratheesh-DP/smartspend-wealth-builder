@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
@@ -40,6 +42,17 @@ interface ReconciliationRecord {
 }
 
 type LiveMatchStatus = "matched" | "amount-mismatch" | "date-mismatch" | "duplicate" | "unmatched";
+
+const TRANSACTION_CATEGORIES = [
+  "Food", "Shopping", "Travel", "Bills", "Entertainment", "Education", "Housing",
+  "Transport", "Utilities", "Health", "Investment", "Other",
+];
+
+interface StatementReviewEdit {
+  category: string;
+  date: string;
+  amount: string;
+}
 
 interface LiveMatch {
   statement: Transaction;
@@ -100,6 +113,8 @@ const Controller = () => {
   const [runCount, setRunCount] = useState(1);
   const [statementRows, setStatementRows] = useState<Transaction[]>([]);
   const [liveMatches, setLiveMatches] = useState<LiveMatch[]>([]);
+  const [reviewEdits, setReviewEdits] = useState<Record<string, StatementReviewEdit>>({});
+  const [importedReviewIds, setImportedReviewIds] = useState<Set<string>>(() => new Set());
   const [ocrLoading, setOcrLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
@@ -163,6 +178,8 @@ const Controller = () => {
       const rows = Array.isArray(data?.transactions) ? data.transactions as Transaction[] : [];
       if (!rows.length) throw new Error("No transactions found in that statement");
       setStatementRows(rows);
+      setReviewEdits({});
+      setImportedReviewIds(new Set());
       toast.success(`${rows.length} statement rows ready to reconcile`);
     } catch (error: any) {
       toast.error(error?.message || "Could not read that bank statement");
@@ -215,19 +232,40 @@ const Controller = () => {
 
   const importReviewedRows = () => {
     if (!statementRows.length) return;
-    const reconciliationById = new Map(liveMatches.map((match) => [match.statement.id, match]));
-    const reviewedRows = statementRows.map((row) => {
-      const match = reconciliationById.get(row.id);
-      return match ? {
-        ...row,
-        reconciliationStatus: match.status,
-        reconciliationReason: match.reason,
-        comparedTransactionId: match.dashboard?.id,
-      } : row;
+    const unmatched = liveMatches.filter((match) => match.status === "unmatched");
+    if (!unmatched.length) {
+      toast.error("There are no unmatched rows to add. Matched and other exception rows are not imported by this action.");
+      return;
+    }
+    const invalid = unmatched.find(({ statement }) => {
+      const edit = reviewEdits[statement.id];
+      const category = edit?.category ?? statement.category;
+      const date = edit?.date ?? statement.date;
+      const amount = Number(edit?.amount ?? Math.abs(statement.amount));
+      const parsedDate = new Date(`${date}T00:00:00`);
+      return !TRANSACTION_CATEGORIES.includes(category) || !/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(parsedDate.getTime()) || !Number.isFinite(amount) || amount <= 0;
+    });
+    if (invalid) {
+      toast.error("Check the category, date, and positive amount for each unmatched row.");
+      return;
+    }
+    const reviewedRows = unmatched.map(({ statement, reason }) => {
+      const edit = reviewEdits[statement.id];
+      const amount = Number(edit?.amount ?? Math.abs(statement.amount));
+      return {
+        ...statement,
+        category: edit?.category ?? statement.category,
+        date: edit?.date ?? statement.date,
+        amount: statement.type === "expense" ? -Math.abs(amount) : Math.abs(amount),
+        reconciliationStatus: "unmatched" as const,
+        reconciliationReason: `Reviewed and added. ${reason}`,
+        reviewed: true,
+      };
     });
     addLocalTransactions(reviewedRows);
     queryClient.invalidateQueries({ queryKey: ["transactions"] });
-    toast.success(`${statementRows.length} reviewed statement rows added to your dashboard feed`);
+    setImportedReviewIds((current) => new Set([...current, ...reviewedRows.map((row) => row.id)]));
+    toast.success(`${reviewedRows.length} reviewed unmatched ${reviewedRows.length === 1 ? "transaction was" : "transactions were"} added. Dashboard and budgets are refreshing.`);
   };
 
   return (
@@ -279,13 +317,28 @@ const Controller = () => {
               </div>
               <div className="flex flex-col gap-3 border-b border-border/30 pb-4 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-xs text-muted-foreground">Rows are not added to your dashboard until you confirm this import.</p>
-                <Button variant="outline" onClick={importReviewedRows} disabled={!liveMatches.length} className="gap-2">
-                  <CheckCircle className="h-4 w-4" />Add reviewed rows to dashboard
+                <Button variant="outline" onClick={importReviewedRows} disabled={!liveMatches.length || !liveMatches.some((match) => match.status === "unmatched" && !importedReviewIds.has(match.statement.id))} className="gap-2">
+                  <CheckCircle className="h-4 w-4" />Add reviewed unmatched rows
                 </Button>
               </div>
-              <div className="max-h-72 overflow-auto rounded-lg border border-border/40">
-                <table className="w-full min-w-[700px] text-left text-sm"><thead className="border-b border-border/40 bg-secondary/20 text-xs text-muted-foreground"><tr><th className="px-4 py-3">Statement row</th><th className="px-4 py-3">Dashboard match</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Finding</th></tr></thead>
-                  <tbody className="divide-y divide-border/30">{(liveMatches.length ? liveMatches : statementRows.map((statement) => ({ statement, dashboard: null, status: "unmatched" as const, reason: "Ready to match." }))).map((match, index) => <tr key={`${match.statement.id}-${index}`}><td className="px-4 py-3"><p className="font-medium">{match.statement.description}</p><p className="mt-1 text-xs text-muted-foreground">{match.statement.date} · {formatInr(Math.abs(match.statement.amount))}</p></td><td className="px-4 py-3">{match.dashboard ? <><p>{match.dashboard.description}</p><p className="mt-1 text-xs text-muted-foreground">{match.dashboard.date} · {formatInr(Math.abs(match.dashboard.amount))}</p></> : <span className="text-muted-foreground">—</span>}</td><td className="px-4 py-3">{match.status === "matched" ? <Badge className="gap-1"><CheckCircle className="h-3 w-3" />Matched</Badge> : <Badge variant="destructive">{match.status.replace("-", " ")}</Badge>}</td><td className="px-4 py-3 text-xs text-muted-foreground">{match.reason}</td></tr>)}</tbody>
+              <div className="max-h-[30rem] overflow-auto rounded-lg border border-border/40">
+                <table className="w-full min-w-[1040px] text-left text-sm"><thead className="sticky top-0 border-b border-border/40 bg-secondary/95 text-xs text-muted-foreground"><tr><th className="px-4 py-3">Statement row</th><th className="px-4 py-3">Category</th><th className="px-4 py-3">Date</th><th className="px-4 py-3">Amount (₹)</th><th className="px-4 py-3">Match</th><th className="px-4 py-3">Finding</th></tr></thead>
+                  <tbody className="divide-y divide-border/30">{(liveMatches.length ? liveMatches : statementRows.map((statement) => ({ statement, dashboard: null, status: "unmatched" as const, reason: "Match rows first to confirm this is not already on your dashboard." }))).map((match, index) => {
+                    const { statement } = match;
+                    const editable = match.status === "unmatched" && liveMatches.length > 0 && !importedReviewIds.has(statement.id);
+                    const edit = reviewEdits[statement.id];
+                    const categoryValue = edit?.category ?? (TRANSACTION_CATEGORIES.includes(statement.category) ? statement.category : "Other");
+                    const updateEdit = (field: keyof StatementReviewEdit, value: string) => setReviewEdits((current) => ({
+                      ...current,
+                      [statement.id]: {
+                        category: current[statement.id]?.category ?? categoryValue,
+                        date: current[statement.id]?.date ?? statement.date,
+                        amount: current[statement.id]?.amount ?? String(Math.abs(statement.amount)),
+                        [field]: value,
+                      },
+                    }));
+                    return <tr key={`${statement.id}-${index}`}><td className="px-4 py-3"><p className="max-w-56 truncate font-medium" title={statement.description}>{statement.description}</p><p className="mt-1 text-xs text-muted-foreground">{statement.type === "income" ? "Income" : "Expense"}</p></td><td className="px-4 py-3">{editable ? <Select value={categoryValue} onValueChange={(value) => updateEdit("category", value)}><SelectTrigger aria-label={`Category for ${statement.description}`} className="w-36"><SelectValue /></SelectTrigger><SelectContent>{TRANSACTION_CATEGORIES.map((category) => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent></Select> : <span>{categoryValue}</span>}</td><td className="px-4 py-3">{editable ? <Input aria-label={`Date for ${statement.description}`} type="date" className="w-40" value={edit?.date ?? statement.date} onChange={(event) => updateEdit("date", event.target.value)} /> : <span>{edit?.date ?? statement.date}</span>}</td><td className="px-4 py-3">{editable ? <Input aria-label={`Amount for ${statement.description}`} type="number" min="0.01" step="0.01" className="w-32" value={edit?.amount ?? String(Math.abs(statement.amount))} onChange={(event) => updateEdit("amount", event.target.value)} /> : <span>{formatInr(Math.abs(Number(edit?.amount ?? statement.amount)))}</span>}</td><td className="px-4 py-3">{importedReviewIds.has(statement.id) ? <Badge className="gap-1"><CheckCircle className="h-3 w-3" />Reviewed</Badge> : match.status === "matched" ? <Badge className="gap-1"><CheckCircle className="h-3 w-3" />Matched</Badge> : <Badge variant="destructive">{match.status.replaceAll("-", " ")}</Badge>}</td><td className="max-w-64 px-4 py-3 text-xs text-muted-foreground">{match.dashboard ? <><p>{match.dashboard.description}</p><p className="mt-1">{match.dashboard.date} · {formatInr(Math.abs(match.dashboard.amount))}</p></> : match.reason}</td></tr>;
+                  })}</tbody>
                 </table>
               </div>
             </>
