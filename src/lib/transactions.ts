@@ -11,6 +11,7 @@ export interface Transaction {
   reconciliationStatus?: "matched" | "amount-mismatch" | "date-mismatch" | "duplicate" | "unmatched";
   reconciliationReason?: string;
   comparedTransactionId?: string;
+  reviewed?: boolean;
 }
 
 export interface TransactionLoadResult {
