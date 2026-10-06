@@ -57,7 +57,10 @@ async def main():
         added = next((row for row in saved if row["id"] == "ocr-review-test"), None)
         assert added and added["category"] == "Utilities" and added["date"] == today and added["amount"] == -1250 and added["reviewed"] is True
         await review_page.goto("http://localhost:8080/budget")
-        await review_page.get_by_text("1250 of ₹100").wait_for(timeout=5000)
+        await review_page.wait_for_timeout(700)
+        await review_page.screenshot(path=str(SCREENSHOTS / "controller_review_budget.png"))
+        print("Review budget text:", (await review_page.locator("body").inner_text())[-1500:])
+        await review_page.get_by_text("₹1,250 of ₹100").wait_for(timeout=5000)
         assert await review_page.get_by_text("1 category is over budget.").count() == 1
         await review_page.goto("http://localhost:8080/")
         await review_page.get_by_text("Unmatched Pharmacy Purchase").wait_for(timeout=5000)
