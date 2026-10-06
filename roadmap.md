@@ -1,6 +1,6 @@
 # SmartSpend task roadmap
 
-- [ ] Add editable category/date/amount review for unmatched bank-statement rows and refresh dashboard/budget data after confirmation.
+- [x] Add editable category/date/amount review for unmatched bank-statement rows and refresh dashboard/budget data after confirmation; verified with the focused browser test and full 13-test end-to-end suite.
 - [ ] Verify real dashboard totals after the user shares the sheet with the Google account connected in Lovable (current access error: Google Sheets 403; backend paused).
 - [ ] Deploy Beru and OCR, then verify a real transaction Q&A and real statement reconciliation (blocked until Lovable Cloud resumes, sheet access is granted, and a real statement is uploaded).
 - [x] Add confirmed statement-row import, preserve reconciliation outcomes, and refresh budget alerts from the shared transaction feed.
