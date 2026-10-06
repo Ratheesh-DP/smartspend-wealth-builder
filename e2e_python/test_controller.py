@@ -59,8 +59,8 @@ async def main():
         await review_page.goto("http://localhost:8080/budget")
         await review_page.wait_for_timeout(700)
         await review_page.screenshot(path=str(SCREENSHOTS / "controller_review_budget.png"))
-        print("Review budget text:", (await review_page.locator("body").inner_text())[-1500:])
-        await review_page.get_by_text("₹1,250 of ₹100").wait_for(timeout=5000)
+        budget_text = await review_page.locator("body").inner_text()
+        assert "₹1,250.00 of ₹100.00" in budget_text
         assert await review_page.get_by_text("1 category is over budget.").count() == 1
         await review_page.goto("http://localhost:8080/")
         await review_page.get_by_text("Unmatched Pharmacy Purchase").wait_for(timeout=5000)
