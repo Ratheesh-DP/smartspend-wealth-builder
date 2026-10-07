@@ -7,6 +7,7 @@ import { useFormatAmount } from "@/contexts/PreferencesContext";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { loadTransactions } from "@/lib/transactions";
+import { TransactionFeedNotice } from "@/components/TransactionFeedNotice";
 
 const CATEGORY_COLORS: Record<string, string> = {
   Food: "hsl(38, 92%, 50%)",
@@ -95,12 +96,7 @@ const Index = () => {
         <p className="text-muted-foreground text-sm">Manage and track your financials seamlessly.</p>
       </div>
 
-      {transactionFeed?.warning && (
-        <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning">
-          <p className="font-medium">Google Sheets could not be read, so these totals may include only locally imported transactions.</p>
-          <p className="mt-1">Open the spending spreadsheet, choose Share, and give Viewer access to the Google account connected to Sheets in Lovable. Then refresh this page to compare your real totals.</p>
-        </div>
-      )}
+      <TransactionFeedNotice warning={transactionFeed?.warning} />
 
       {/* Overview Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

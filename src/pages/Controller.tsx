@@ -26,6 +26,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { addLocalTransactions, loadTransactions, Transaction } from "@/lib/transactions";
+import { TransactionFeedNotice } from "@/components/TransactionFeedNotice";
 
 type RecordStatus = "matched" | "exception";
 
@@ -304,7 +305,7 @@ const Controller = () => {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {transactionFeed?.warning && <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning">Google Sheets is not currently accessible to the connected account. Share the spreadsheet with that account, then refresh; local statement rows can still be reviewed and imported.</div>}
+          <TransactionFeedNotice warning={transactionFeed?.warning} />
           {!statementRows.length ? (
             <div className="flex items-center justify-center gap-3 rounded-lg border border-dashed border-border/50 py-8 text-sm text-muted-foreground"><FileText className="h-5 w-5" />No statement loaded yet.</div>
           ) : (
