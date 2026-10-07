@@ -18,10 +18,14 @@ Deno.serve(async (req) => {
     return jsonResponse({ source: "Google Sheets", sheetTitle: result.sheetTitle, transactions: result.transactions });
   } catch (error) {
     const status = Number(error?.status) || 500;
-    return jsonResponse({
-      error: "Unable to read Google Sheets",
-      status,
-      details: error?.details || error?.message || "The connected spreadsheet could not be read.",
-    }, status >= 400 && status < 600 ? status : 500);
+    const details = error?.details || error?.message || "The connected spreadsheet could not be read.";
+
+    // Access problems (not shared, revoked, missing file) are an expected user state,
+    // not a server failure: reply 200 with a structured accessError so the app can guide the user.
+    if (status === 401 || status === 403 || status === 404) {
+      return jsonResponse({ source: "Google Sheets", transactions: [], accessError: { status, details } });
+    }
+
+    return jsonResponse({ error: "Unable to read Google Sheets", status, details }, status >= 400 && status < 600 ? status : 500);
   }
 });
