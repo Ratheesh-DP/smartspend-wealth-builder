@@ -51,6 +51,17 @@ export async function loadTransactions(): Promise<TransactionLoadResult> {
       };
     }
 
+    const accessStatus = Number(data?.accessError?.status);
+    if (accessStatus) {
+      return {
+        transactions: localTransactions,
+        source: localTransactions.length > 0 ? "local" : "empty",
+        warning: accessStatus === 404
+          ? "Google Sheets could not find the spreadsheet for the connected account. Check the link and sharing, then recheck access."
+          : "Google Sheets denied access to the connected account. Share the spreadsheet with that account as a Viewer, then recheck access.",
+      };
+    }
+
     const sheetTransactions = Array.isArray(data?.transactions) ? data.transactions as Transaction[] : [];
     return {
       transactions: [...sheetTransactions, ...localTransactions],
