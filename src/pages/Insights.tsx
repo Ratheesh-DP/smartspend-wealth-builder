@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { loadTransactions } from "@/lib/transactions";
+import { TransactionFeedNotice } from "@/components/TransactionFeedNotice";
 import {
   AlertTriangle,
   Info,
@@ -310,6 +311,7 @@ const Insights = () => {
 
   return (
     <div className="space-y-6">
+      <TransactionFeedNotice warning={transactionFeed?.warning} />
       <div>
         <h1 className="text-2xl font-display font-bold">
           <span className="text-primary">Smart</span> Insights

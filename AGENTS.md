@@ -1,3 +1,4 @@
 - Keep user transaction reads centralized through `loadTransactions()` and invalidate the `transactions` query after confirmed local imports, so dashboards and budgets stay consistent.
 - Keep credentialed provider and AI Gateway calls inside Lovable Cloud edge functions; browsers may submit validated feature inputs but must never receive server secrets.
 - Build cash forecasts from the shared transaction feed and local budgets, and label any assumptions instead of fabricating financial facts.
+- Keep transaction-feed recovery messaging and refresh controls in one shared component so all pages handle Sheets access failures consistently.

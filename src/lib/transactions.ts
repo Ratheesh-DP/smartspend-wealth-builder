@@ -38,21 +38,31 @@ function writeLocalTransactions(transactions: Transaction[]) {
 
 export async function loadTransactions(): Promise<TransactionLoadResult> {
   const localTransactions = readLocalTransactions();
-  const { data, error } = await supabase.functions.invoke("sheets-transactions");
+  try {
+    const { data, error } = await supabase.functions.invoke("sheets-transactions");
+    if (error) {
+      const status = Number((error as { context?: { status?: number } }).context?.status);
+      return {
+        transactions: localTransactions,
+        source: localTransactions.length > 0 ? "local" : "empty",
+        warning: status === 403
+          ? "Google Sheets denied access to the connected account. Share the spreadsheet with that account as a Viewer, then recheck access."
+          : "Google Sheets could not be read. Locally imported transactions remain available; recheck access to try again.",
+      };
+    }
 
-  if (error) {
+    const sheetTransactions = Array.isArray(data?.transactions) ? data.transactions as Transaction[] : [];
+    return {
+      transactions: [...sheetTransactions, ...localTransactions],
+      source: sheetTransactions.length > 0 ? "google-sheets" : localTransactions.length > 0 ? "local" : "empty",
+    };
+  } catch {
     return {
       transactions: localTransactions,
       source: localTransactions.length > 0 ? "local" : "empty",
-      warning: "Google Sheets access is unavailable. Share the spreadsheet with the connected Google account, then refresh.",
+      warning: "Google Sheets could not be reached. Locally imported transactions remain available; recheck access to try again.",
     };
   }
-
-  const sheetTransactions = Array.isArray(data?.transactions) ? data.transactions as Transaction[] : [];
-  return {
-    transactions: [...sheetTransactions, ...localTransactions],
-    source: sheetTransactions.length > 0 ? "google-sheets" : localTransactions.length > 0 ? "local" : "empty",
-  };
 }
 
 export function addLocalTransactions(rows: Transaction[]) {

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { loadTransactions } from "@/lib/transactions";
 import { loadBudgets } from "@/lib/budgets";
 import { useFormatAmount } from "@/contexts/PreferencesContext";
+import { TransactionFeedNotice } from "@/components/TransactionFeedNotice";
 
 const CashForecast = () => {
   const fmt = useFormatAmount();
@@ -52,7 +53,7 @@ const CashForecast = () => {
 
   return <div className="space-y-6">
     <div className="flex items-start gap-3"><div className="mt-1 rounded-md bg-primary/10 p-2 text-primary"><CalendarClock className="h-5 w-5" /></div><div><h1 className="text-2xl font-display font-bold">Cash Forecast</h1><p className="mt-1 text-sm text-muted-foreground">A four-month view of expected net cash movement from your transaction history.</p></div></div>
-    {feed?.warning && <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning">Google Sheets could not be read. Forecast figures use locally imported transactions only until access is granted and the dashboard is refreshed.</div>}
+    <TransactionFeedNotice warning={feed?.warning} />
     <div className="grid gap-4 sm:grid-cols-3">
       <Card className="glass-card stat-income"><CardContent className="pt-5"><p className="text-sm text-muted-foreground">Average monthly income</p><p className="mt-2 text-2xl font-display font-bold">{fmt(projection.avgIncome)}</p></CardContent></Card>
       <Card className="glass-card stat-expense"><CardContent className="pt-5"><p className="text-sm text-muted-foreground">Projected monthly spending</p><p className="mt-2 text-2xl font-display font-bold">{fmt(projection.forecastExpense)}</p></CardContent></Card>

@@ -11,6 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { useFormatAmount } from "@/contexts/PreferencesContext";
 import { loadTransactions } from "@/lib/transactions";
 import { loadBudgets, removeBudget, saveBudget, Budget as BudgetRecord } from "@/lib/budgets";
+import { TransactionFeedNotice } from "@/components/TransactionFeedNotice";
 
 const CATEGORIES = [
   "Food", "Shopping", "Travel", "Bills", "Entertainment", "Education", "Housing",
@@ -90,11 +91,7 @@ const Budget = () => {
         </div>
       </div>
 
-      {transactionFeed?.warning && (
-        <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning">
-          {transactionFeed.warning}
-        </div>
-      )}
+      <TransactionFeedNotice warning={transactionFeed?.warning} />
 
       {overLimitCount > 0 && (
         <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive" role="alert">

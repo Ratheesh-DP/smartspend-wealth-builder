@@ -19,6 +19,7 @@ import {
   removeLocalTransaction,
   Transaction,
 } from "@/lib/transactions";
+import { TransactionFeedNotice } from "@/components/TransactionFeedNotice";
 
 const CATEGORIES = [
   "Food", "Shopping", "Travel", "Bills", "Entertainment",
@@ -315,11 +316,7 @@ const Transactions = () => {
         )}
       </div>
 
-      {transactionFeed?.warning && (
-        <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning">
-          {transactionFeed.warning}
-        </div>
-      )}
+      <TransactionFeedNotice warning={transactionFeed?.warning} />
 
       <div className="grid gap-4 md:grid-cols-2">
       {/* CSV Upload Drop Zone */}
