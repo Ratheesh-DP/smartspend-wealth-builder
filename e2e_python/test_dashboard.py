@@ -32,6 +32,8 @@ async def test_dashboard_overview_cards():
         await page.wait_for_selector(f"text={balance_text}", timeout=10000)
         await page.wait_for_selector(f"text={income_text}", timeout=10000)
         await page.wait_for_selector(f"text={expense_text}", timeout=10000)
+        await page.wait_for_selector("text=Totals use Google Sheets data", timeout=10000)
+        await page.wait_for_selector("text=Last successful Sheets read", timeout=10000)
 
         await page.screenshot(path=str(SCREENSHOTS / "dashboard_overview.png"))
         print("PASS: dashboard overview cards show correct totals")

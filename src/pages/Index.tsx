@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { loadTransactions } from "@/lib/transactions";
 import { TransactionFeedNotice } from "@/components/TransactionFeedNotice";
+import { GoogleSheetsStatus } from "@/components/GoogleSheetsStatus";
 
 const CATEGORY_COLORS: Record<string, string> = {
   Food: "hsl(38, 92%, 50%)",
@@ -36,7 +37,7 @@ const Index = () => {
   const [trendPeriod, setTrendPeriod] = useState("daily");
   const fmt = useFormatAmount();
 
-  const { data: transactionFeed } = useQuery({
+  const { data: transactionFeed, isLoading: transactionsLoading } = useQuery({
     queryKey: ["transactions"],
     queryFn: loadTransactions,
     enabled: !!user,
@@ -97,6 +98,7 @@ const Index = () => {
       </div>
 
       <TransactionFeedNotice warning={transactionFeed?.warning} />
+      <GoogleSheetsStatus feed={transactionFeed} isLoading={transactionsLoading} />
 
       {/* Overview Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

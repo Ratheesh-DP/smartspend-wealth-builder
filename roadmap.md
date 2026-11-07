@@ -11,3 +11,4 @@
 - [x] Add secure Zerodha Kite login and session reuse (Cloud deployment pending project resume).
 - [x] Add Zerodha user profile and Nifty 100 SMA Signals tabs (live API calls pending deployment).
 - [x] Document Zerodha dashboard setup and local development.
+- [x] Add dashboard transaction-source and last-successful-Sheets-read status, plus a secure AI explanation flow for pasted Sheets errors.
