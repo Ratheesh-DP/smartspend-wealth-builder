@@ -51,8 +51,9 @@ export function GoogleSheetsStatus({ feed, isLoading }: GoogleSheetsStatusProps)
   const [explanation, setExplanation] = useState<ErrorExplanation | null>(null);
   const [requestError, setRequestError] = useState("");
   const [isExplaining, setIsExplaining] = useState(false);
+  const [blockedStatus, setBlockedStatus] = useState<number | null>(null);
 
-  const explainError = async () => {
+  const explainError = async (acknowledgeRecovery = false) => {
     const cleanedError = errorText.trim();
     if (!cleanedError) {
       setRequestError("Paste the Google Sheets error message first.");
@@ -62,15 +63,16 @@ export function GoogleSheetsStatus({ feed, isLoading }: GoogleSheetsStatusProps)
     setIsExplaining(true);
     setRequestError("");
     setExplanation(null);
+    if (acknowledgeRecovery) setBlockedStatus(null);
     try {
       const { data, error } = await supabase.functions.invoke("sheets-error-explainer", {
-        body: { error: cleanedError },
+        body: { error: cleanedError, acknowledgeRecovery },
       });
       if (error) {
         const context = (error as { context?: unknown }).context;
         if (context instanceof Response) {
           const body = await context.clone().json().catch(() => null);
-          throw new Error(typeof body?.error === "string" ? body.error : error.message);
+          throw Object.assign(new Error(typeof body?.error === "string" ? body.error : error.message), { status: context.status });
         }
         throw error;
       }
@@ -78,8 +80,11 @@ export function GoogleSheetsStatus({ feed, isLoading }: GoogleSheetsStatusProps)
         throw new Error("The explanation could not be read. Please try again.");
       }
       setExplanation({ likelyCause: data.likelyCause, recoverySteps: data.recoverySteps });
+      setBlockedStatus(null);
     } catch (error) {
       setRequestError(errorMessage(error));
+      const status = Number((error as { status?: number })?.status);
+      if (status === 402 || status === 403) setBlockedStatus(status);
     } finally {
       setIsExplaining(false);
     }
@@ -131,12 +136,25 @@ export function GoogleSheetsStatus({ feed, isLoading }: GoogleSheetsStatusProps)
               className="min-h-28 resize-y"
             />
             <p className="text-xs text-muted-foreground">Remove account details, spreadsheet links, access tokens, or private sheet contents before sending.</p>
+            {blockedStatus && (
+              <p className="rounded-md border border-warning/30 bg-warning/5 p-3 text-sm text-warning" role="status">
+                AI access is paused after a {blockedStatus} response. Ask your workspace owner to restore access first. Only retry after they confirm it is restored.
+              </p>
+            )}
             <div className="flex justify-end">
-              <Button type="button" onClick={explainError} disabled={isExplaining || !errorText.trim()}>
+              <Button type="button" onClick={() => explainError()} disabled={isExplaining || !errorText.trim() || blockedStatus !== null}>
                 {isExplaining ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
                 {isExplaining ? "Reviewing…" : "Explain error"}
               </Button>
             </div>
+            {blockedStatus && (
+              <div className="flex justify-end">
+                <Button type="button" variant="outline" onClick={() => explainError(true)} disabled={isExplaining || !errorText.trim()}>
+                  {isExplaining ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
+                  {isExplaining ? "Checking access…" : "Access restored — try again"}
+                </Button>
+              </div>
+            )}
           </div>
           {requestError && (
             <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">
