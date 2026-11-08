@@ -82,7 +82,9 @@ async function readResponseStream(response: Response) {
       if (parsed.type === "response.output_text.delta") text += parsed.delta ?? "";
       if (parsed.type === "response.refusal.delta" || parsed.type === "response.refusal.done") refusal = true;
       if (parsed.type === "response.failed") {
-        throw Object.assign(new Error(parsed.response?.error?.message || "The AI service could not complete this explanation."), { status: 502 });
+        const failure = parsed.response?.error ?? {};
+        const status = Number(failure.status) || (failure.code === "insufficient_quota" ? 402 : failure.code === "access_denied" ? 403 : 502);
+        throw Object.assign(new Error(failure.message || "The AI service could not complete this explanation."), { status, providerDenial: status === 403 });
       }
       if (parsed.type === "response.completed") {
         const output = parsed.response?.output ?? [];
@@ -103,7 +105,7 @@ async function readResponseStream(response: Response) {
     for (const event of events) consumeEvent(event);
   }
   if (buffer.trim()) consumeEvent(buffer);
-  if (refusal) throw Object.assign(new Error("The AI service declined to explain this error."), { status: 403 });
+  if (refusal) throw Object.assign(new Error("The AI service declined to explain this error."), { status: 403, contentRefusal: true });
   if (!text.trim()) throw Object.assign(new Error("The AI service returned no explanation."), { status: 502 });
   return text.trim();
 }
@@ -189,7 +191,9 @@ Deno.serve(async (req) => {
     } catch (error) {
       const status = Number(error?.status) || 502;
       const message = error?.message || "The AI service could not complete this explanation.";
-      if (status === 402 || status === 403) await saveBlockedState(stateClient, userId, status, message);
+      if ((status === 402 || status === 403) && !error?.contentRefusal) {
+        await saveBlockedState(stateClient, userId, status, message);
+      }
       return jsonResponse({ error: message }, status, upstream.headers);
     }
     let explanation;
