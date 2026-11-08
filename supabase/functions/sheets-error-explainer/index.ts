@@ -8,6 +8,7 @@ import {
 } from "../_shared/run-id.ts";
 
 const MAX_ERROR_LENGTH = 3000;
+const MAX_REQUEST_BYTES = 16 * 1024;
 const MODEL = "openai/gpt-6-astra";
 const OUTPUT_SCHEMA = {
   type: "object",
@@ -53,6 +54,30 @@ function adminClient() {
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!url || !key) throw new Error("Secure AI pause storage is not configured.");
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}
+
+async function readBoundedJson(req: Request) {
+  const declaredLength = Number(req.headers.get("Content-Length") || 0);
+  if (declaredLength > MAX_REQUEST_BYTES) throw Object.assign(new Error("The request is too large."), { status: 413 });
+  if (!req.body) throw Object.assign(new Error("Send a valid error message to explain."), { status: 400 });
+  const reader = req.body.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    text += decoder.decode(value, { stream: true });
+    if (text.length > MAX_REQUEST_BYTES) {
+      await reader.cancel();
+      throw Object.assign(new Error("The request is too large."), { status: 413 });
+    }
+  }
+  text += decoder.decode();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw Object.assign(new Error("Send a valid error message to explain."), { status: 400 });
+  }
 }
 
 async function saveBlockedState(client: any, userId: string, status: number, message: string) {
@@ -130,12 +155,7 @@ Deno.serve(async (req) => {
     if (claimsError || !claims?.claims?.sub) return jsonResponse({ error: "Your sign-in could not be verified. Sign in again and retry." }, 401);
     const userId = claims.claims.sub;
 
-    let body;
-    try {
-      body = await req.json();
-    } catch {
-      return jsonResponse({ error: "Send a valid error message to explain." }, 400);
-    }
+    const body = await readBoundedJson(req);
     const errorText = typeof body?.error === "string" ? body.error.trim() : "";
     if (!errorText || errorText.length > MAX_ERROR_LENGTH) {
       return jsonResponse({ error: `Paste an error message of 1–${MAX_ERROR_LENGTH} characters.` }, 400);
