@@ -164,11 +164,20 @@ Deno.serve(async (req) => {
     const key = Deno.env.get("LOVABLE_API_KEY");
     if (!key) return jsonResponse({ error: "AI error explanations are not configured." }, 500);
 
-    // Each call is an explicit user request. A prior pause is cleared only here,
-    // never by a background retry or a page load.
     const stateClient = adminClient();
-    const { error: clearError } = await stateClient.from("ai_provider_denials").delete().eq("user_id", userId);
-    if (clearError) return jsonResponse({ error: "AI recovery storage is not ready. Try again after Lovable Cloud is available." }, 503);
+    const { data: paused, error: readPauseError } = await stateClient
+      .from("ai_provider_denials")
+      .select("model_id,http_status,message")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (readPauseError) return jsonResponse({ error: "AI recovery storage is not ready. Try again after Lovable Cloud is available." }, 503);
+    if (paused && body?.acknowledgeRecovery !== true) {
+      return jsonResponse({ error: paused.message, paused: true, model: paused.model_id }, paused.http_status);
+    }
+    if (paused && body?.acknowledgeRecovery === true) {
+      const { error: clearError } = await stateClient.from("ai_provider_denials").delete().eq("user_id", userId);
+      if (clearError) return jsonResponse({ error: "AI recovery storage is not ready. Try again after Lovable Cloud is available." }, 503);
+    }
 
     const safeErrorText = redactSensitiveText(errorText);
     const gateway = createLovableAiGatewayRunIdFetch(getLovableAiGatewayRunId(req));
