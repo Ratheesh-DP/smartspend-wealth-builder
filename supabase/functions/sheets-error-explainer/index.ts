@@ -40,6 +40,17 @@ function safeGatewayMessage(body: string, fallback: string) {
   }
 }
 
+async function saveBlockedState(client: any, userId: string, status: number, message: string) {
+  const { error } = await client.from("ai_provider_denials").upsert({
+    user_id: userId,
+    model_id: MODEL,
+    http_status: status,
+    message: message.slice(0, 600),
+    denied_at: new Date().toISOString(),
+  }, { onConflict: "user_id" });
+  if (error) console.error("Unable to persist AI pause state", error.message);
+}
+
 async function readResponseStream(response: Response) {
   if (!response.body) throw Object.assign(new Error("The AI service returned an empty response."), { status: 502 });
   const reader = response.body.getReader();
@@ -100,6 +111,7 @@ Deno.serve(async (req) => {
     const token = authHeader.slice("Bearer ".length);
     const { data: claims, error: claimsError } = await authClient.auth.getClaims(token);
     if (claimsError || !claims?.claims?.sub) return jsonResponse({ error: "Your sign-in could not be verified. Sign in again and retry." }, 401);
+    const userId = claims.claims.sub;
 
     let body;
     try {
@@ -114,6 +126,11 @@ Deno.serve(async (req) => {
 
     const key = Deno.env.get("LOVABLE_API_KEY");
     if (!key) return jsonResponse({ error: "AI error explanations are not configured." }, 500);
+
+    // Each call is an explicit user request. A prior pause is cleared only here,
+    // never by a background retry or a page load.
+    const { error: clearError } = await authClient.from("ai_provider_denials").delete().eq("user_id", userId);
+    if (clearError) return jsonResponse({ error: "AI recovery storage is not ready. Try again after Lovable Cloud is available." }, 503);
 
     const gateway = createLovableAiGatewayRunIdFetch(getLovableAiGatewayRunId(req));
     const upstream = await gateway.fetch("https://ai.gateway.lovable.dev/v1/responses", {
@@ -140,13 +157,24 @@ Deno.serve(async (req) => {
         ? "AI service authentication is unavailable."
         : `AI service returned status ${upstream.status}.`;
       const message = safeGatewayMessage(bodyText, fallback);
+      if (upstream.status === 402 || upstream.status === 403) {
+        await saveBlockedState(authClient, userId, upstream.status, message);
+      }
       const headers = getLovableAiGatewayResponseHeaders(upstream.headers, { ...corsHeaders, "Content-Type": "application/json" });
       const retryAfter = upstream.headers.get("Retry-After");
       if (retryAfter) headers.set("Retry-After", retryAfter);
       return new Response(JSON.stringify({ error: message }), { status: upstream.status, headers });
     }
 
-    const raw = await readResponseStream(upstream);
+    let raw: string;
+    try {
+      raw = await readResponseStream(upstream);
+    } catch (error) {
+      const status = Number(error?.status) || 502;
+      const message = error?.message || "The AI service could not complete this explanation.";
+      if (status === 402 || status === 403) await saveBlockedState(authClient, userId, status, message);
+      return jsonResponse({ error: message }, status, upstream.headers);
+    }
     let explanation;
     try {
       explanation = JSON.parse(raw);
