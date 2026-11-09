@@ -37,8 +37,14 @@ function safeGatewayMessage(body: string, fallback: string) {
         : typeof parsed?.error === "string" ? parsed.error : fallback;
     return message.slice(0, 600);
   } catch {
-    return body.trim().slice(0, 600) || fallback;
+    return fallback;
   }
+}
+
+function shouldPauseGateway(status: number, details: string) {
+  if (status === 402) return true;
+  if (status !== 403) return false;
+  return !/(provider_not_available_in_region|model_requires_retention_consent|model_vendor_not_enabled)/i.test(details);
 }
 
 function redactSensitiveText(value: string) {
@@ -112,7 +118,10 @@ async function readResponseStream(response: Response) {
       if (parsed.type === "response.failed") {
         const failure = parsed.response?.error ?? {};
         const status = Number(failure.status) || (failure.code === "insufficient_quota" ? 402 : failure.code === "access_denied" ? 403 : 502);
-        throw Object.assign(new Error(failure.message || "The AI service could not complete this explanation."), { status, providerDenial: status === 403 });
+        throw Object.assign(new Error(failure.message || "The AI service could not complete this explanation."), {
+          status,
+          pauseRequired: shouldPauseGateway(status, JSON.stringify(failure)),
+        });
       }
       if (parsed.type === "response.completed") {
         const output = parsed.response?.output ?? [];
@@ -208,14 +217,14 @@ Deno.serve(async (req) => {
         ? "AI service authentication is unavailable."
         : `AI service returned status ${upstream.status}.`;
       const message = safeGatewayMessage(bodyText, fallback);
-      if (upstream.status === 402 || upstream.status === 403) {
+      const pauseRequired = shouldPauseGateway(upstream.status, bodyText);
+      if (pauseRequired) {
         await saveBlockedState(stateClient, userId, upstream.status, message);
       }
       const headers = getLovableAiGatewayResponseHeaders(upstream.headers, { ...corsHeaders, "Content-Type": "application/json" });
       const retryAfter = upstream.headers.get("Retry-After");
       if (retryAfter) headers.set("Retry-After", retryAfter);
-      const providerDenial = upstream.status === 403 && !/(provider_not_available_in_region|model_requires_retention_consent|model_vendor_not_enabled)/i.test(bodyText);
-      return new Response(JSON.stringify({ error: message, ...(providerDenial ? { paused: true, model: MODEL } : {}) }), { status: upstream.status, headers });
+      return new Response(JSON.stringify({ error: message, ...(pauseRequired ? { paused: true, model: MODEL } : {}) }), { status: upstream.status, headers });
     }
 
     let raw: string;
@@ -224,10 +233,10 @@ Deno.serve(async (req) => {
     } catch (error) {
       const status = Number(error?.status) || 502;
       const message = error?.message || "The AI service could not complete this explanation.";
-      if ((status === 402 || status === 403) && !error?.contentRefusal) {
+      if (error?.pauseRequired && !error?.contentRefusal) {
         await saveBlockedState(stateClient, userId, status, message);
       }
-      return jsonResponse({ error: message, ...(error?.contentRefusal ? { refusal: true } : {}), ...(error?.providerDenial ? { paused: true, model: MODEL } : {}) }, status, upstream.headers);
+      return jsonResponse({ error: message, ...(error?.contentRefusal ? { refusal: true } : {}), ...(error?.pauseRequired ? { paused: true, model: MODEL } : {}) }, status, upstream.headers);
     }
     let explanation;
     try {
