@@ -214,7 +214,8 @@ Deno.serve(async (req) => {
       const headers = getLovableAiGatewayResponseHeaders(upstream.headers, { ...corsHeaders, "Content-Type": "application/json" });
       const retryAfter = upstream.headers.get("Retry-After");
       if (retryAfter) headers.set("Retry-After", retryAfter);
-      return new Response(JSON.stringify({ error: message }), { status: upstream.status, headers });
+      const providerDenial = upstream.status === 403 && !/(provider_not_available_in_region|model_requires_retention_consent|model_vendor_not_enabled)/i.test(bodyText);
+      return new Response(JSON.stringify({ error: message, ...(providerDenial ? { paused: true, model: MODEL } : {}) }), { status: upstream.status, headers });
     }
 
     let raw: string;
@@ -226,7 +227,7 @@ Deno.serve(async (req) => {
       if ((status === 402 || status === 403) && !error?.contentRefusal) {
         await saveBlockedState(stateClient, userId, status, message);
       }
-      return jsonResponse({ error: message, ...(error?.contentRefusal ? { refusal: true } : {}) }, status, upstream.headers);
+      return jsonResponse({ error: message, ...(error?.contentRefusal ? { refusal: true } : {}), ...(error?.providerDenial ? { paused: true, model: MODEL } : {}) }, status, upstream.headers);
     }
     let explanation;
     try {

@@ -88,7 +88,7 @@ export function GoogleSheetsStatus({ feed, isLoading }: GoogleSheetsStatusProps)
     } catch (error) {
       setRequestError(errorMessage(error));
       const status = Number((error as { status?: number })?.status);
-      if ((status === 402 || status === 403) && !(error as { refusal?: boolean })?.refusal) setBlockedStatus(status);
+      if ((status === 402 || status === 403) && !(error as { refusal?: boolean })?.refusal && (error as { paused?: boolean })?.paused) setBlockedStatus(status);
     } finally {
       setIsExplaining(false);
     }
