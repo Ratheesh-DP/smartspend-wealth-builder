@@ -72,7 +72,11 @@ export function GoogleSheetsStatus({ feed, isLoading }: GoogleSheetsStatusProps)
         const context = (error as { context?: unknown }).context;
         if (context instanceof Response) {
           const body = await context.clone().json().catch(() => null);
-          throw Object.assign(new Error(typeof body?.error === "string" ? body.error : error.message), { status: context.status });
+          throw Object.assign(new Error(typeof body?.error === "string" ? body.error : error.message), {
+            status: context.status,
+            refusal: body?.refusal === true,
+            paused: body?.paused === true,
+          });
         }
         throw error;
       }
@@ -84,7 +88,7 @@ export function GoogleSheetsStatus({ feed, isLoading }: GoogleSheetsStatusProps)
     } catch (error) {
       setRequestError(errorMessage(error));
       const status = Number((error as { status?: number })?.status);
-      if (status === 402 || status === 403) setBlockedStatus(status);
+      if ((status === 402 || status === 403) && !(error as { refusal?: boolean })?.refusal) setBlockedStatus(status);
     } finally {
       setIsExplaining(false);
     }
@@ -104,6 +108,12 @@ export function GoogleSheetsStatus({ feed, isLoading }: GoogleSheetsStatusProps)
           <Clock3 className="h-3.5 w-3.5 shrink-0" />
           <span>Last successful Sheets read: {formatReadTime(feed?.lastSuccessfulSheetsReadAt)}</span>
         </p>
+        {feed?.warning && (
+          <p className="flex items-center gap-2 text-xs text-warning">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+            <span>Sheets is unavailable; local-only totals may be incomplete or stale.</span>
+          </p>
+        )}
       </div>
       <Dialog open={open} onOpenChange={(nextOpen) => {
         setOpen(nextOpen);

@@ -226,7 +226,7 @@ Deno.serve(async (req) => {
       if ((status === 402 || status === 403) && !error?.contentRefusal) {
         await saveBlockedState(stateClient, userId, status, message);
       }
-      return jsonResponse({ error: message }, status, upstream.headers);
+      return jsonResponse({ error: message, ...(error?.contentRefusal ? { refusal: true } : {}) }, status, upstream.headers);
     }
     let explanation;
     try {
