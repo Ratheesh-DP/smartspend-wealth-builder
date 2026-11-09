@@ -13,8 +13,8 @@ const MODEL = "openai/gpt-6-astra";
 const OUTPUT_SCHEMA = {
   type: "object",
   properties: {
-    likelyCause: { type: "string" },
-    recoverySteps: { type: "array", items: { type: "string" } },
+    likelyCause: { type: "string", minLength: 1, maxLength: 1000 },
+    recoverySteps: { type: "array", items: { type: "string", minLength: 1, maxLength: 500 }, minItems: 2, maxItems: 4 },
   },
   required: ["likelyCause", "recoverySteps"],
   additionalProperties: false,
