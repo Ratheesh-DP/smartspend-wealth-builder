@@ -28,7 +28,11 @@ const LAST_SHEETS_READ_KEY = "smartspend_last_successful_sheets_read";
 
 function getLastSuccessfulSheetsReadAt() {
   if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(LAST_SHEETS_READ_KEY);
+  try {
+    return window.localStorage.getItem(LAST_SHEETS_READ_KEY);
+  } catch {
+    return null;
+  }
 }
 
 function readLocalTransactions(): Transaction[] {
@@ -74,7 +78,13 @@ export async function loadTransactions(): Promise<TransactionLoadResult> {
 
     const sheetTransactions = Array.isArray(data?.transactions) ? data.transactions as Transaction[] : [];
     const lastSuccessfulSheetsReadAt = new Date().toISOString();
-    if (typeof window !== "undefined") window.localStorage.setItem(LAST_SHEETS_READ_KEY, lastSuccessfulSheetsReadAt);
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(LAST_SHEETS_READ_KEY, lastSuccessfulSheetsReadAt);
+      } catch {
+        // Keep feed loading available when browser storage is disabled.
+      }
+    }
     return {
       transactions: [...sheetTransactions, ...localTransactions],
       source: sheetTransactions.length > 0 ? "google-sheets" : localTransactions.length > 0 ? "local" : "empty",

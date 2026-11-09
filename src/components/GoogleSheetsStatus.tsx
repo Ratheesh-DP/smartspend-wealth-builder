@@ -52,6 +52,7 @@ export function GoogleSheetsStatus({ feed, isLoading }: GoogleSheetsStatusProps)
   const [requestError, setRequestError] = useState("");
   const [isExplaining, setIsExplaining] = useState(false);
   const [blockedStatus, setBlockedStatus] = useState<number | null>(null);
+  const [blockedTerminal, setBlockedTerminal] = useState(false);
 
   const explainError = async (acknowledgeRecovery = false) => {
     const cleanedError = errorText.trim();
@@ -63,7 +64,10 @@ export function GoogleSheetsStatus({ feed, isLoading }: GoogleSheetsStatusProps)
     setIsExplaining(true);
     setRequestError("");
     setExplanation(null);
-    if (acknowledgeRecovery) setBlockedStatus(null);
+    if (acknowledgeRecovery) {
+      setBlockedStatus(null);
+      setBlockedTerminal(false);
+    }
     try {
       const { data, error } = await supabase.functions.invoke("sheets-error-explainer", {
         body: { error: cleanedError, acknowledgeRecovery },
@@ -72,7 +76,12 @@ export function GoogleSheetsStatus({ feed, isLoading }: GoogleSheetsStatusProps)
         const context = (error as { context?: unknown }).context;
         if (context instanceof Response) {
           const body = await context.clone().json().catch(() => null);
-          throw Object.assign(new Error(typeof body?.error === "string" ? body.error : error.message), { status: context.status });
+          throw Object.assign(new Error(typeof body?.error === "string" ? body.error : error.message), {
+            status: context.status,
+            refusal: body?.refusal === true,
+            paused: body?.paused === true,
+            terminal: body?.terminal === true,
+          });
         }
         throw error;
       }
@@ -81,10 +90,14 @@ export function GoogleSheetsStatus({ feed, isLoading }: GoogleSheetsStatusProps)
       }
       setExplanation({ likelyCause: data.likelyCause, recoverySteps: data.recoverySteps });
       setBlockedStatus(null);
+      setBlockedTerminal(false);
     } catch (error) {
       setRequestError(errorMessage(error));
       const status = Number((error as { status?: number })?.status);
-      if (status === 402 || status === 403) setBlockedStatus(status);
+      if ((status === 402 || status === 403) && !(error as { refusal?: boolean })?.refusal && (error as { paused?: boolean })?.paused) {
+        setBlockedStatus(status);
+        setBlockedTerminal((error as { terminal?: boolean })?.terminal === true);
+      }
     } finally {
       setIsExplaining(false);
     }
@@ -104,6 +117,12 @@ export function GoogleSheetsStatus({ feed, isLoading }: GoogleSheetsStatusProps)
           <Clock3 className="h-3.5 w-3.5 shrink-0" />
           <span>Last successful Sheets read: {formatReadTime(feed?.lastSuccessfulSheetsReadAt)}</span>
         </p>
+        {feed?.warning && (
+          <p className="flex items-center gap-2 text-xs text-warning">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+            <span>Sheets is unavailable; local-only totals may be incomplete or stale.</span>
+          </p>
+        )}
       </div>
       <Dialog open={open} onOpenChange={(nextOpen) => {
         setOpen(nextOpen);
@@ -138,7 +157,9 @@ export function GoogleSheetsStatus({ feed, isLoading }: GoogleSheetsStatusProps)
             <p className="text-xs text-muted-foreground">Remove account details, spreadsheet links, access tokens, or private sheet contents before sending.</p>
             {blockedStatus && (
               <p className="rounded-md border border-warning/30 bg-warning/5 p-3 text-sm text-warning" role="status">
-                AI access is paused after a {blockedStatus} response. Ask your workspace owner to restore access first. Only retry after they confirm it is restored.
+                {blockedTerminal
+                  ? "This AI model is unavailable for the current workspace settings. Ask the workspace owner to resolve model access before requesting another explanation."
+                  : `AI access is paused after a ${blockedStatus} response. Ask your workspace owner to restore access first. Only retry after they confirm it is restored.`}
               </p>
             )}
             <div className="flex justify-end">
@@ -147,7 +168,7 @@ export function GoogleSheetsStatus({ feed, isLoading }: GoogleSheetsStatusProps)
                 {isExplaining ? "Reviewing…" : "Explain error"}
               </Button>
             </div>
-            {blockedStatus && (
+            {blockedStatus && !blockedTerminal && (
               <div className="flex justify-end">
                 <Button type="button" variant="outline" onClick={() => explainError(true)} disabled={isExplaining || !errorText.trim()}>
                   {isExplaining ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
