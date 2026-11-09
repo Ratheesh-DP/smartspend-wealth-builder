@@ -42,9 +42,11 @@ function safeGatewayMessage(body: string, fallback: string) {
 }
 
 function shouldPauseGateway(status: number, details: string) {
-  if (status === 402) return true;
-  if (status !== 403) return false;
-  return !/(provider_not_available_in_region|model_requires_retention_consent|model_vendor_not_enabled)/i.test(details);
+  if (status === 402) return "workspace_access";
+  if (status !== 403) return null;
+  if (/(provider_not_available_in_region|model_requires_retention_consent|model_vendor_not_enabled)/i.test(details)) return "model_eligibility";
+  if (/(credit_limit_reached|ai.*disabled|workspace.*policy)/i.test(details)) return "workspace_access";
+  return "provider_access";
 }
 
 function redactSensitiveText(value: string) {
@@ -89,12 +91,13 @@ async function readBoundedJson(req: Request) {
   }
 }
 
-async function saveBlockedState(client: any, userId: string, status: number, message: string) {
+async function saveBlockedState(client: any, userId: string, status: number, message: string, pauseKind: string) {
   const { error } = await client.from("ai_provider_denials").upsert({
     user_id: userId,
     model_id: MODEL,
     http_status: status,
     message: message.slice(0, 600),
+    pause_kind: pauseKind,
     denied_at: new Date().toISOString(),
   }, { onConflict: "user_id" });
   if (error) console.error("Unable to persist AI pause state", error.message);
@@ -120,7 +123,7 @@ async function readResponseStream(response: Response) {
         const status = Number(failure.status) || (failure.code === "insufficient_quota" ? 402 : failure.code === "access_denied" ? 403 : 502);
         throw Object.assign(new Error(failure.message || "The AI service could not complete this explanation."), {
           status,
-          pauseRequired: shouldPauseGateway(status, JSON.stringify(failure)),
+          pauseKind: shouldPauseGateway(status, JSON.stringify(failure)),
         });
       }
       if (parsed.type === "response.completed") {
@@ -137,7 +140,7 @@ async function readResponseStream(response: Response) {
     const { value, done } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
-    const events = buffer.split("\n\n");
+    const events = buffer.split(/\r?\n\r?\n/);
     buffer = events.pop() ?? "";
     for (const event of events) consumeEvent(event);
   }
@@ -179,12 +182,15 @@ Deno.serve(async (req) => {
     const stateClient = adminClient();
     const { data: paused, error: readPauseError } = await stateClient
       .from("ai_provider_denials")
-      .select("model_id,http_status,message")
+      .select("model_id,http_status,message,pause_kind")
       .eq("user_id", userId)
       .maybeSingle();
     if (readPauseError) return jsonResponse({ error: "AI recovery storage is not ready. Try again after Lovable Cloud is available." }, 503);
     if (paused && body?.acknowledgeRecovery !== true) {
-      return jsonResponse({ error: paused.message, paused: true, model: paused.model_id }, paused.http_status);
+      return jsonResponse({ error: paused.message, paused: true, terminal: paused.pause_kind === "model_eligibility", model: paused.model_id }, paused.http_status);
+    }
+    if (paused?.pause_kind === "model_eligibility") {
+      return jsonResponse({ error: paused.message, paused: true, terminal: true, model: paused.model_id }, paused.http_status);
     }
     if (paused && body?.acknowledgeRecovery === true) {
       const { error: clearError } = await stateClient.from("ai_provider_denials").delete().eq("user_id", userId);
@@ -217,14 +223,14 @@ Deno.serve(async (req) => {
         ? "AI service authentication is unavailable."
         : `AI service returned status ${upstream.status}.`;
       const message = safeGatewayMessage(bodyText, fallback);
-      const pauseRequired = shouldPauseGateway(upstream.status, bodyText);
-      if (pauseRequired) {
-        await saveBlockedState(stateClient, userId, upstream.status, message);
+      const pauseKind = shouldPauseGateway(upstream.status, bodyText);
+      if (pauseKind) {
+        await saveBlockedState(stateClient, userId, upstream.status, message, pauseKind);
       }
       const headers = getLovableAiGatewayResponseHeaders(upstream.headers, { ...corsHeaders, "Content-Type": "application/json" });
       const retryAfter = upstream.headers.get("Retry-After");
       if (retryAfter) headers.set("Retry-After", retryAfter);
-      return new Response(JSON.stringify({ error: message, ...(pauseRequired ? { paused: true, model: MODEL } : {}) }), { status: upstream.status, headers });
+      return new Response(JSON.stringify({ error: message, ...(pauseKind ? { paused: true, terminal: pauseKind === "model_eligibility", model: MODEL } : {}) }), { status: upstream.status, headers });
     }
 
     let raw: string;
@@ -233,10 +239,10 @@ Deno.serve(async (req) => {
     } catch (error) {
       const status = Number(error?.status) || 502;
       const message = error?.message || "The AI service could not complete this explanation.";
-      if (error?.pauseRequired && !error?.contentRefusal) {
-        await saveBlockedState(stateClient, userId, status, message);
+      if (error?.pauseKind && !error?.contentRefusal) {
+        await saveBlockedState(stateClient, userId, status, message, error.pauseKind);
       }
-      return jsonResponse({ error: message, ...(error?.contentRefusal ? { refusal: true } : {}), ...(error?.pauseRequired ? { paused: true, model: MODEL } : {}) }, status, upstream.headers);
+      return jsonResponse({ error: message, ...(error?.contentRefusal ? { refusal: true } : {}), ...(error?.pauseKind ? { paused: true, terminal: error.pauseKind === "model_eligibility", model: MODEL } : {}) }, status, upstream.headers);
     }
     let explanation;
     try {
