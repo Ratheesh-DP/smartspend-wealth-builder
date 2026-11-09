@@ -45,6 +45,7 @@ function redactSensitiveText(value: string) {
   return value
     .replace(/Bearer\s+[A-Za-z0-9._~+\/-]+=*/gi, "Bearer [REDACTED]")
     .replace(/\b(access[_-]?token|refresh[_-]?token|api[_-]?key|client[_-]?secret)\s*[:=]\s*[^\s,;]+/gi, "$1=[REDACTED]")
+    .replace(/([?&](?:access[_-]?token|refresh[_-]?token|token|key|secret|code|auth)=)[^&#\s]*/gi, "$1[REDACTED]")
     .replace(/https?:\/\/docs\.google\.com\/spreadsheets\/d\/[^\s/?]+[^\s]*/gi, "[spreadsheet link]")
     .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[email]");
 }
@@ -63,11 +64,13 @@ async function readBoundedJson(req: Request) {
   const reader = req.body.getReader();
   const decoder = new TextDecoder();
   let text = "";
+  let bytesRead = 0;
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
+    bytesRead += value.byteLength;
     text += decoder.decode(value, { stream: true });
-    if (text.length > MAX_REQUEST_BYTES) {
+    if (bytesRead > MAX_REQUEST_BYTES) {
       await reader.cancel();
       throw Object.assign(new Error("The request is too large."), { status: 413 });
     }
