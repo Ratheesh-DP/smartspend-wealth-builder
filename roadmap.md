@@ -12,3 +12,6 @@
 - [x] Add Zerodha user profile and Nifty 100 SMA Signals tabs (live API calls pending deployment).
 - [x] Document Zerodha dashboard setup and local development.
 - [ ] Finish AI error explanations after Lovable Cloud resumes: create the per-user pause-state table, deploy the function, and verify a real Gateway response. Dashboard source/freshness display and the mocked recovery flow are implemented and tested.
+- [ ] Finish Google Sheets access-error explanations with tailored, safe AI recovery steps; deploy and verify after Lovable Cloud resumes.
+- [ ] Add a current-month PDF report with spending categories, budget progress, and source/freshness attribution for balance, income, and expenses; verify the downloaded file.
+- [ ] Ground Beru's finance Q&A in shared transactions and saved monthly budgets; preserve privacy and validate its live Gateway flow when Cloud is active.
